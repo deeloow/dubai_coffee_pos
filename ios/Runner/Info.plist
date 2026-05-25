@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Dubai Coffee POS</string>
+
+  <!-- Local network access for local socket communication -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>We need local network access to connect cashier and kitchen devices over the local socket server.</string>
+</dict>
+</plist>
