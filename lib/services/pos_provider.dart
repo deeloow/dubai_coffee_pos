@@ -5,7 +5,7 @@ class PosProvider extends ChangeNotifier {
   List<OrderItem> _items = [];
   String _customerName = '';
   DiscountInfo _discount = const DiscountInfo();
-  String _currentCategory = 'Hot Coffee';
+  String _currentCategory = 'All';
   String _searchQuery = '';
 
   List<OrderItem> get items => List.unmodifiable(_items);
@@ -34,15 +34,25 @@ class PosProvider extends ChangeNotifier {
 
   // ── Cart ──────────────────────────────────────────────────────────────────
   void addItem(MenuItem menuItem) {
-    final idx = _items.indexWhere((i) => i.name == menuItem.name);
+    final idx = _items.indexWhere((i) => i.menuItemId == menuItem.id);
     if (idx >= 0) {
       _items[idx].qty++;
     } else {
       _items.add(OrderItem(
+        menuItemId: menuItem.id,
         name: menuItem.name,
         price: menuItem.price,
         icon: menuItem.icon,
+        sugarLevel: 'Regular sugar',
       ));
+    }
+    notifyListeners();
+  }
+
+  /// Set the sugar level for all items currently in the cart.
+  void setSugarForAll(String sugar) {
+    for (final it in _items) {
+      it.sugarLevel = sugar;
     }
     notifyListeners();
   }
@@ -72,8 +82,7 @@ class PosProvider extends ChangeNotifier {
   }
 
   // ── Totals ────────────────────────────────────────────────────────────────
-  double get subtotal =>
-      _items.fold(0, (s, i) => s + i.price * i.qty);
+  double get subtotal => _items.fold(0, (s, i) => s + i.price * i.qty);
 
   double get discountAmount => _discount.apply(subtotal);
 

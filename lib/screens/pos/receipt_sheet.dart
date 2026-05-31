@@ -102,9 +102,13 @@ class ReceiptSheet extends StatelessWidget {
                           style: const TextStyle(fontSize: 14)),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: AppText(
-                            '${item.name} × ${item.qty}',
-                            size: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppText('${item.name} × ${item.qty}', size: 12),
+                            AppText(item.sugarLevel, size: 11, color: AppColors.textMuted),
+                          ],
+                        ),
                       ),
                       AppText(formatPHP(item.price * item.qty),
                           size: 12,
@@ -128,6 +132,8 @@ class ReceiptSheet extends StatelessWidget {
                 isDiscount: true),
           DividerRow(
               left: 'VAT (12%)', right: formatPHP(order.vat)),
+          DividerRow(
+              left: 'Sugar', right: order.sugarLevel),
 
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 6),

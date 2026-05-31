@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
@@ -111,129 +110,49 @@ class RecipeService {
       return null;
     }
 
-    final mappings = <String, List<Map<String, dynamic>>>{
-      'Espresso': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-      ],
-      'Americano': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-      ],
-      'Cappuccino': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.15},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Latte': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.2},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Macchiato': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.05},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Flat White': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.15},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Dubai Karak': [
-        {'name': 'Espresso Blend', 'qty': 0.015},
-        {'name': 'Whole Milk', 'qty': 0.1},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-      ],
-      'Café Mocha': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.15},
-        {'name': 'Chocolate Powder', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Hazelnut Latte': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.2},
-        {'name': 'Vanilla Syrup', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Iced Americano': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Cold Brew': [
-        {'name': 'Espresso Blend', 'qty': 0.015},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Iced Latte': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.2},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Iced Mocha': [
-        {'name': 'Espresso Blend', 'qty': 0.02},
-        {'name': 'Whole Milk', 'qty': 0.2},
-        {'name': 'Chocolate Powder', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Frappuccino': [
-        {'name': 'Espresso Blend', 'qty': 0.03},
-        {'name': 'Whole Milk', 'qty': 0.15},
-        {'name': 'Chocolate Powder', 'qty': 0.02},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-        {'name': 'Lids', 'qty': 1.0},
-      ],
-      'Oat Milk': [
-        {'name': 'Oat Milk', 'qty': 0.15},
-        {'name': 'Cups (Medium)', 'qty': 1.0},
-      ],
-      'Vanilla Syrup': [
-        {'name': 'Vanilla Syrup', 'qty': 0.01},
-      ],
-      'Caramel Drizzle': [
-        {'name': 'Caramel Sauce', 'qty': 0.01},
-      ],
-      'Croissant': [
-        {'name': 'Croissants', 'qty': 1.0},
-      ],
-      'Muffin': [
-        {'name': 'Muffins', 'qty': 1.0},
-      ],
-      'Cheesecake': [
-        {'name': 'Cheesecake Slice', 'qty': 1.0},
-      ],
-    };
+    final menuItems = [
+      'Spanish Khalifa 12oz',
+      'Spanish Khalifa 16oz',
+      'Caramel Macchiato 12oz',
+      'Caramel Macchiato 16oz',
+      'Himalayan Pink Salt 12oz',
+      'Himalayan Pink Salt 16oz',
+      'Flat White 12oz',
+      'Flat White 16oz',
+      'Long Black 12oz',
+      'Long Black 16oz',
+      'Choco Lava 12oz',
+      'Choco Lava 16oz',
+      'Matcha 12oz',
+      'Matcha 16oz',
+      'Strawberry Matcha 12oz',
+      'Strawberry Matcha 16oz',
+    ];
 
-    for (final entry in mappings.entries) {
-      final ingredients = <RecipeIngredient>[];
-      for (final item in entry.value) {
-        final itemId = await inventoryId(item['name'] as String);
-        if (itemId == null) continue;
-        ingredients.add(RecipeIngredient(
-          inventoryItemId: itemId,
-          inventoryItemName: item['name'] as String,
-          quantityNeeded: item['qty'] as double,
-        ));
-      }
+    String cupNameForMenu(String menuName) {
+      final lower = menuName.toLowerCase();
+      if (lower.contains('12oz')) return 'Cups 12oz';
+      if (lower.contains('16oz')) return 'Cups 16oz';
+      return 'Cups 12oz';
+    }
 
-      if (ingredients.isNotEmpty) {
-        final recipe = Recipe(
-          id: '',
-          menuItemName: entry.key,
-          ingredients: ingredients,
-        );
-        await saveRecipe(recipe);
-      }
+    for (final menuName in menuItems) {
+      final cupName = cupNameForMenu(menuName);
+      final cupId = await inventoryId(cupName);
+      if (cupId == null) continue;
+
+      final recipe = Recipe(
+        id: '',
+        menuItemName: menuName,
+        ingredients: [
+          RecipeIngredient(
+            inventoryItemId: cupId,
+            inventoryItemName: cupName,
+            quantityNeeded: 1.0,
+          ),
+        ],
+      );
+      await saveRecipe(recipe);
     }
   }
 

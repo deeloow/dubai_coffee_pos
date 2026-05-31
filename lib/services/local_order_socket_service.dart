@@ -232,11 +232,11 @@ class LocalOrderSocketService {
         : 0.0;
     final items = [
       OrderItem(
+        menuItemId: payload['id']?.toString() ?? '',
         name: itemName,
         price: price,
         icon: payload['icon']?.toString() ?? '☕',
-        qty: qty,
-      )
+        qty: qty,        sugarLevel: payload['sugarLevel']?.toString() ?? 'Regular sugar',      )
     ];
 
     final tableValue = payload['table']?.toString() ?? 'Unknown';

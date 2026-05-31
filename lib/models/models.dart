@@ -160,28 +160,41 @@ class MenuItem {
 // ─── Order Item ──────────────────────────────────────────────────────────────
 
 class OrderItem {
+  final String menuItemId;
   final String name;
   final double price;
   final String icon;
   int qty;
+  String sugarLevel;
 
   OrderItem({
+    required this.menuItemId,
     required this.name,
     required this.price,
     required this.icon,
     this.qty = 1,
+    this.sugarLevel = 'Regular sugar',
   });
 
   double get subtotal => price * qty;
 
   Map<String, dynamic> toMap() =>
-      {'name': name, 'price': price, 'icon': icon, 'qty': qty};
+      {
+        'menuItemId': menuItemId,
+        'name': name,
+        'price': price,
+        'icon': icon,
+        'qty': qty,
+        'sugarLevel': sugarLevel,
+      };
 
   factory OrderItem.fromMap(Map<String, dynamic> map) => OrderItem(
+        menuItemId: map['menuItemId'] ?? '',
         name: map['name'] ?? '',
         price: (map['price'] as num).toDouble(),
         icon: map['icon'] ?? '☕',
         qty: map['qty'] ?? 1,
+        sugarLevel: map['sugarLevel'] ?? 'Regular sugar',
       );
 }
 
@@ -245,6 +258,8 @@ class Order {
   final double tendered;
   final double change;
   final PaymentMethod paymentMethod;
+  final String sugarLevel;
+  final bool kitchenCompleted;
   final DateTime createdAt;
   OrderStatus status;
 
@@ -262,6 +277,8 @@ class Order {
     required this.tendered,
     required this.change,
     required this.paymentMethod,
+    this.sugarLevel = 'Regular sugar',
+    this.kitchenCompleted = false,
     required this.createdAt,
     this.status = OrderStatus.paid,
   });
@@ -290,7 +307,48 @@ class Order {
     }
   }
 
+  Order copyWith({
+    String? id,
+    int? orderNumber,
+    String? customerName,
+    String? cashierName,
+    List<OrderItem>? items,
+    double? subtotal,
+    double? discount,
+    String? discountLabel,
+    double? vat,
+    double? total,
+    double? tendered,
+    double? change,
+    PaymentMethod? paymentMethod,
+    String? sugarLevel,
+    bool? kitchenCompleted,
+    DateTime? createdAt,
+    OrderStatus? status,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      customerName: customerName ?? this.customerName,
+      cashierName: cashierName ?? this.cashierName,
+      items: items ?? this.items,
+      subtotal: subtotal ?? this.subtotal,
+      discount: discount ?? this.discount,
+      discountLabel: discountLabel ?? this.discountLabel,
+      vat: vat ?? this.vat,
+      total: total ?? this.total,
+      tendered: tendered ?? this.tendered,
+      change: change ?? this.change,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      sugarLevel: sugarLevel ?? this.sugarLevel,
+      kitchenCompleted: kitchenCompleted ?? this.kitchenCompleted,
+      createdAt: createdAt ?? this.createdAt,
+      status: status ?? this.status,
+    );
+  }
+
   Map<String, dynamic> toMap() => {
+        'id': id,
         'orderNumber': orderNumber,
         'customerName': customerName,
         'cashierName': cashierName,
@@ -303,6 +361,8 @@ class Order {
         'tendered': tendered,
         'change': change,
         'paymentMethod': paymentMethod.index,
+        'sugarLevel': sugarLevel,
+        'kitchenCompleted': kitchenCompleted,
         'createdAt': createdAt.toIso8601String(),
         'status': status.index,
       };
@@ -323,6 +383,8 @@ class Order {
         tendered: (map['tendered'] as num).toDouble(),
         change: (map['change'] as num).toDouble(),
         paymentMethod: PaymentMethod.values[map['paymentMethod'] ?? 0],
+        sugarLevel: map['sugarLevel'] ?? 'Regular sugar',
+        kitchenCompleted: map['kitchenCompleted'] ?? false,
         createdAt: map['createdAt'] is DateTime
             ? map['createdAt'] as DateTime
             : DateTime.parse(map['createdAt'] as String),

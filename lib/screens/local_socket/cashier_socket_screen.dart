@@ -1,8 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/models.dart';
-import '../../services/auth_provider.dart';
 import '../../services/local_order_socket_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';

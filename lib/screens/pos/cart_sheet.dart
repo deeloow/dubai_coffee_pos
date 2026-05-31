@@ -20,6 +20,7 @@ class _CartSheetState extends State<CartSheet> {
   final OrderService _orderSvc = OrderService();
   DiscountType _discType = DiscountType.none;
   final _discValCtrl = TextEditingController(text: '0');
+  String _sugarLevel = 'Regular sugar';
   bool _processing = false;
 
   @override
@@ -54,8 +55,73 @@ class _CartSheetState extends State<CartSheet> {
       return;
     }
 
+    if (method == PaymentMethod.gcash) {
+      _showGcashDialog(context, auth);
+      return;
+    }
+
     setState(() => _processing = true);
     await _finalize(context, method, pos.total, 0, auth);
+  }
+
+  Future<void> _showGcashDialog(
+      BuildContext context, AuthProvider auth) async {
+    final pos = context.read<PosProvider>();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const AppText('GCash Payment',
+            size: 16, weight: FontWeight.w600),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppText(
+              'Scan the owner/admin GCash QR code below. Tap Done after the payment is completed.',
+              size: 13,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                color: AppColors.bgLight,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: AppColors.borderColor, width: 0.5),
+              ),
+              child: const Center(
+                child: Icon(Icons.qr_code, size: 110, color: AppColors.espresso),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const AppText('Owner/Admin GCash QR',
+                size: 13, weight: FontWeight.w600),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const AppText('Cancel',
+                size: 13, color: AppColors.textMuted),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _processing = true);
+              await _finalize(context, PaymentMethod.gcash,
+                  pos.total, 0, auth);
+            },
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showCashDialog(
@@ -180,6 +246,7 @@ class _CartSheetState extends State<CartSheet> {
         tendered: tendered,
         change: change,
         paymentMethod: method,
+        sugarLevel: _sugarLevel,
         createdAt: DateTime.now(),
         status: OrderStatus.paid,
       );
@@ -199,17 +266,18 @@ class _CartSheetState extends State<CartSheet> {
         tendered: order.tendered,
         change: order.change,
         paymentMethod: order.paymentMethod,
+        sugarLevel: order.sugarLevel,
         createdAt: order.createdAt,
         status: order.status,
       );
 
       final localSocket = context.read<LocalOrderSocketProvider>();
-      if (localSocket.isServer && localSocket.isConnected) {
+      if (localSocket.isConnected) {
         final sent = await localSocket.sendOrder(savedOrder);
         if (!sent && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Order confirmed, but failed to send to kitchen.'),
+              content: Text('Order confirmed, but failed to send to connected device.'),
               backgroundColor: AppColors.red,
             ),
           );
@@ -452,6 +520,58 @@ class _CartSheetState extends State<CartSheet> {
                       const Divider(
                           height: 16,
                           color: AppColors.borderColor),
+                      const SizedBox(height: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const AppText('Sugar option',
+                              size: 12, color: AppColors.textMuted),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final option in [
+                                'No sugar',
+                                'Less sugar',
+                                'Regular sugar',
+                                'Extra sugar'
+                              ])
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _sugarLevel = option;
+                                    context.read<PosProvider>().setSugarForAll(option);
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: _sugarLevel == option
+                                          ? AppColors.espresso
+                                          : AppColors.white,
+                                      borderRadius:
+                                          BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: _sugarLevel == option
+                                            ? AppColors.espresso
+                                            : AppColors.borderColor,
+                                      ),
+                                    ),
+                                    child: AppText(option,
+                                        size: 12,
+                                        weight: _sugarLevel == option
+                                            ? FontWeight.w700
+                                            : FontWeight.normal,
+                                        color: _sugarLevel == option
+                                            ? AppColors.goldLight
+                                            : AppColors.brown2),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ),
                       DividerRow(
                           left: 'Total',
                           right: formatPHP(pos.total),
@@ -472,10 +592,6 @@ class _CartSheetState extends State<CartSheet> {
                               true, PaymentMethod.cash, context),
                           _payBtn('GCash', Icons.phone_android,
                               false, PaymentMethod.gcash, context),
-                          _payBtn('Card', Icons.credit_card,
-                              false, PaymentMethod.card, context),
-                          _payBtn('PayMaya', Icons.wallet_outlined,
-                              false, PaymentMethod.payMaya, context),
                         ],
                       ),
                       const SizedBox(height: 16),

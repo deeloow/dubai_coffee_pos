@@ -20,8 +20,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _categoryFilter = 'All';
 
   static const categories = [
-    'All', 'Raw Materials', 'Dairy', 'Dry Goods',
-    'Syrups', 'Packaging', 'Pastries'
+    'All', 'Packaging'
   ];
 
   @override
@@ -554,12 +553,10 @@ class _InventoryFormSheetState extends State<_InventoryFormSheet> {
   late final TextEditingController _qtyCtrl;
   late final TextEditingController _thresholdCtrl;
   late final TextEditingController _costCtrl;
-  String _category = 'Raw Materials';
+  String _category = 'Packaging';
   bool _saving = false;
 
-  static const _categories = [
-    'Raw Materials', 'Dairy', 'Dry Goods', 'Syrups', 'Packaging', 'Pastries'
-  ];
+  static const _categories = ['Packaging'];
 
   @override
   void initState() {
@@ -573,7 +570,7 @@ class _InventoryFormSheetState extends State<_InventoryFormSheet> {
         text: item != null ? item.lowStockThreshold.toString() : '');
     _costCtrl = TextEditingController(
         text: item != null ? item.costPerUnit.toString() : '');
-    _category = item?.category ?? 'Raw Materials';
+    _category = item?.category ?? 'Packaging';
   }
 
   @override

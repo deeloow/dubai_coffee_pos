@@ -1,5 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:path_provider/path_provider.dart';
+
 import '../models/models.dart';
 import 'recipe_service.dart';
 
@@ -25,33 +30,188 @@ class MenuService {
     if (_menu.isNotEmpty) return;
 
     final seedData = [
-      {'name': 'Espresso', 'price': 89.0, 'icon': '☕', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Americano', 'price': 99.0, 'icon': '🫖', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Cappuccino', 'price': 129.0, 'icon': '☕', 'category': 'Hot Coffee', 'badge': 'Best'},
-      {'name': 'Latte', 'price': 129.0, 'icon': '🥛', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Macchiato', 'price': 119.0, 'icon': '☕', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Flat White', 'price': 119.0, 'icon': '🤍', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Dubai Karak', 'price': 109.0, 'icon': '🌿', 'category': 'Hot Coffee', 'badge': 'Local'},
-      {'name': 'Café Mocha', 'price': 139.0, 'icon': '🍫', 'category': 'Hot Coffee', 'badge': ''},
-      {'name': 'Hazelnut Latte', 'price': 149.0, 'icon': '🌰', 'category': 'Hot Coffee', 'badge': 'New'},
-      {'name': 'Iced Americano', 'price': 109.0, 'icon': '🧊', 'category': 'Cold Drinks', 'badge': ''},
-      {'name': 'Cold Brew', 'price': 139.0, 'icon': '🧋', 'category': 'Cold Drinks', 'badge': 'Best'},
-      {'name': 'Iced Latte', 'price': 139.0, 'icon': '🥤', 'category': 'Cold Drinks', 'badge': ''},
-      {'name': 'Iced Mocha', 'price': 149.0, 'icon': '🍫', 'category': 'Cold Drinks', 'badge': ''},
-      {'name': 'Frappuccino', 'price': 159.0, 'icon': '🧋', 'category': 'Cold Drinks', 'badge': 'New'},
-      {'name': 'Lemon Soda', 'price': 89.0, 'icon': '🍋', 'category': 'Cold Drinks', 'badge': ''},
-      {'name': 'Croissant', 'price': 89.0, 'icon': '🥐', 'category': 'Pastries', 'badge': ''},
-      {'name': 'Muffin', 'price': 79.0, 'icon': '🧁', 'category': 'Pastries', 'badge': ''},
-      {'name': 'Cheesecake', 'price': 129.0, 'icon': '🍰', 'category': 'Pastries', 'badge': 'Best'},
-      {'name': 'Banana Bread', 'price': 99.0, 'icon': '🍞', 'category': 'Pastries', 'badge': ''},
-      {'name': 'Cinnamon Roll', 'price': 109.0, 'icon': '🌀', 'category': 'Pastries', 'badge': 'New'},
-      {'name': 'Butter Cookie', 'price': 59.0, 'icon': '🍪', 'category': 'Pastries', 'badge': ''},
-      {'name': 'Extra Shot', 'price': 30.0, 'icon': '⚡', 'category': 'Add-ons', 'badge': ''},
-      {'name': 'Oat Milk', 'price': 40.0, 'icon': '🌾', 'category': 'Add-ons', 'badge': ''},
-      {'name': 'Vanilla Syrup', 'price': 25.0, 'icon': '🍯', 'category': 'Add-ons', 'badge': ''},
-      {'name': 'Caramel Drizzle', 'price': 25.0, 'icon': '🍮', 'category': 'Add-ons', 'badge': ''},
-      {'name': 'Whipped Cream', 'price': 20.0, 'icon': '🍦', 'category': 'Add-ons', 'badge': ''},
-      {'name': 'Sugar-free', 'price': 20.0, 'icon': '🌿', 'category': 'Add-ons', 'badge': ''},
+      {
+        'name': 'Spanish Khalifa 12oz',
+        'price': 50.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Spanish Khalifa 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Caramel Macchiato 12oz',
+        'price': 60.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Caramel Macchiato 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Himalayan Pink Salt 12oz',
+        'price': 60.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Himalayan Pink Salt 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Flat White 12oz',
+        'price': 60.0,
+        'icon': '🤍',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Flat White 16oz',
+        'price': 80.0,
+        'icon': '🤍',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Long Black 12oz',
+        'price': 50.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Long Black 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Choco Lava 12oz',
+        'price': 60.0,
+        'icon': '🍫',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Choco Lava 16oz',
+        'price': 80.0,
+        'icon': '🍫',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha 12oz',
+        'price': 60.0,
+        'icon': '🍵',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha 16oz',
+        'price': 80.0,
+        'icon': '🍵',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha 12oz',
+        'price': 60.0,
+        'icon': '🍓',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha 16oz',
+        'price': 80.0,
+        'icon': '🍓',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Chocolate',
+        'price': 50.0,
+        'icon': '🍫',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha',
+        'price': 50.0,
+        'icon': '🍵',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Cookies & Cream',
+        'price': 50.0,
+        'icon': '🍪',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Cookies Matcha',
+        'price': 50.0,
+        'icon': '🍪',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Green Apple',
+        'price': 50.0,
+        'icon': '🍏',
+        'category': 'Soda base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Soda base',
+        'badge': ''
+      },
+      {
+        'name': 'Fresh Lemon',
+        'price': 50.0,
+        'icon': '🍋',
+        'category': 'Lemonade-freshly squeeze',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Lemonade-freshly squeeze',
+        'badge': ''
+      },
     ];
 
     for (final item in seedData) {
@@ -90,9 +250,11 @@ class MenuService {
 
     await _menu.put(item.id, {...item.toMap(), 'id': item.id});
 
-    if (existingName != null && existingName.trim().isNotEmpty &&
+    if (existingName != null &&
+        existingName.trim().isNotEmpty &&
         existingName.trim().toLowerCase() != item.name.trim().toLowerCase()) {
-      return await RecipeService().renameRecipeForMenuItem(existingName, item.name);
+      return await RecipeService()
+          .renameRecipeForMenuItem(existingName, item.name);
     }
 
     return false;
@@ -100,5 +262,230 @@ class MenuService {
 
   Future<void> deleteItem(String itemId) async {
     await _menu.delete(itemId);
+  }
+
+  /// Export menu box contents to a JSON file in application documents directory.
+  /// Returns the full path of the exported file.
+  Future<String> exportToJsonFile() async {
+    final items = _menu.values
+        .cast<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+
+    final dir = await getApplicationDocumentsDirectory();
+    final safeTs = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final file = File('${dir.path}/menu_dump_$safeTs.json');
+    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(items));
+    return file.path;
+  }
+
+  /// Replace the entire menu with the standard seed provided by the app.
+  /// This will delete all existing menu entries.
+  Future<void> replaceMenuWithStandardSeed() async {
+    // Clear existing menu
+    for (final key in _menu.keys.cast<dynamic>().toList()) {
+      await _menu.delete(key);
+    }
+
+    final seedData = [
+      // Coffee-espresso base (12oz and 16oz variants)
+      {
+        'name': 'Spanish Khalifa 12oz',
+        'price': 50.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Spanish Khalifa 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Caramel Macchiato 12oz',
+        'price': 60.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Caramel Macchiato 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Himalayan Pink Salt 12oz',
+        'price': 60.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Himalayan Pink Salt 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Flat White 12oz',
+        'price': 60.0,
+        'icon': '🤍',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Flat White 16oz',
+        'price': 80.0,
+        'icon': '🤍',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Long Black 12oz',
+        'price': 50.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Long Black 16oz',
+        'price': 80.0,
+        'icon': '☕',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Choco Lava 12oz',
+        'price': 60.0,
+        'icon': '🍫',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Choco Lava 16oz',
+        'price': 80.0,
+        'icon': '🍫',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha 12oz',
+        'price': 60.0,
+        'icon': '🍵',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha 16oz',
+        'price': 80.0,
+        'icon': '🍵',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha 12oz',
+        'price': 60.0,
+        'icon': '🍓',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha 16oz',
+        'price': 80.0,
+        'icon': '🍓',
+        'category': 'Coffee-espresso base',
+        'badge': ''
+      },
+
+      // Cloud series
+      {
+        'name': 'Chocolate',
+        'price': 50.0,
+        'icon': '🍫',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Matcha',
+        'price': 50.0,
+        'icon': '🍵',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Cookies & Cream',
+        'price': 50.0,
+        'icon': '🍪',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Cookies Matcha',
+        'price': 50.0,
+        'icon': '🍪',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry Matcha',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Cloud series',
+        'badge': ''
+      },
+
+      // Soda base
+      {
+        'name': 'Green Apple',
+        'price': 50.0,
+        'icon': '🍏',
+        'category': 'Soda base',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Soda base',
+        'badge': ''
+      },
+
+      // Lemonade
+      {
+        'name': 'Fresh Lemon',
+        'price': 50.0,
+        'icon': '🍋',
+        'category': 'Lemonade-freshly squeeze',
+        'badge': ''
+      },
+      {
+        'name': 'Strawberry',
+        'price': 50.0,
+        'icon': '🍓',
+        'category': 'Lemonade-freshly squeeze',
+        'badge': ''
+      },
+    ];
+
+    for (final item in seedData) {
+      final id = _uuid.v4();
+      await _menu.put(id, {
+        ...item,
+        'available': true,
+        'id': id,
+      });
+    }
   }
 }

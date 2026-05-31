@@ -20,7 +20,11 @@ class _MenuScreenState extends State<MenuScreen> {
   String _categoryFilter = 'All';
 
   static const _categories = [
-    'All', 'Hot Coffee', 'Cold Drinks', 'Pastries', 'Add-ons'
+    'All',
+    'Coffee-espresso base',
+    'Cloud series',
+    'Soda base',
+    'Lemonade-freshly squeeze'
   ];
 
   @override
@@ -39,10 +43,11 @@ class _MenuScreenState extends State<MenuScreen> {
     return items.where((item) {
       final lower = item.name.toLowerCase();
       final searchLower = _search.toLowerCase();
-      final matchesSearch = _search.isEmpty || lower.contains(searchLower) ||
+      final matchesSearch = _search.isEmpty ||
+          lower.contains(searchLower) ||
           item.category.toLowerCase().contains(searchLower);
-      final matchesCategory = _categoryFilter == 'All' ||
-          item.category == _categoryFilter;
+      final matchesCategory =
+          _categoryFilter == 'All' || item.category == _categoryFilter;
       return matchesSearch && matchesCategory;
     }).toList();
   }
@@ -74,22 +79,76 @@ class _MenuScreenState extends State<MenuScreen> {
       appBar: AppBar(
         title: const Text('Menu Management'),
         actions: [
-          if (isAdmin)
+          if (isAdmin) ...[
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: () => _showAddEditDialog(context),
               tooltip: 'Add menu item',
             ),
+            IconButton(
+              icon: const Icon(Icons.download_outlined),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  final path = await _menuSvc.exportToJsonFile();
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Menu exported to $path')),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Export failed: $e')),
+                  );
+                }
+              },
+              tooltip: 'Export menu to JSON',
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogCtx) => AlertDialog(
+                    title: const Text('Reset Menu?'),
+                    content: const Text(
+                        'This will remove all existing menu items and replace them with the default menu. Continue?'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx, false),
+                          child: const Text('Cancel')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx, true),
+                          child: const Text('Reset')),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  try {
+                    await _menuSvc.replaceMenuWithStandardSeed();
+                    if (!mounted) return;
+                    messenger.showSnackBar(const SnackBar(
+                        content: Text('Menu reset to default.')));
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                        SnackBar(content: Text('Reset failed: $e')));
+                  }
+                }
+              },
+              tooltip: 'Reset menu to default',
+            ),
+          ],
         ],
       ),
       body: StreamBuilder<List<MenuItem>>(
         stream: _menuSvc.menuStream(),
+        initialData: const [],
         builder: (ctx, snap) {
-          if (!snap.hasData) {
+          if (snap.hasError) {
             return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.gold),
-              ),
+              child: Text('Unable to load menu management data.'),
             );
           }
           final allItems = snap.data!;
@@ -98,16 +157,19 @@ class _MenuScreenState extends State<MenuScreen> {
             children: [
               Container(
                 color: AppColors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (value) => setState(() => _search = value),
                   decoration: InputDecoration(
                     hintText: 'Search menu…',
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
+                    prefixIcon:
+                        const Icon(Icons.search, color: AppColors.textMuted),
                     suffixIcon: _search.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, color: AppColors.textMuted),
+                            icon: const Icon(Icons.clear,
+                                color: AppColors.textMuted),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _search = '');
@@ -135,18 +197,25 @@ class _MenuScreenState extends State<MenuScreen> {
                       onTap: () => setState(() => _categoryFilter = cat),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: selected ? AppColors.espresso : AppColors.white,
+                          color:
+                              selected ? AppColors.espresso : AppColors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: selected ? AppColors.espresso : AppColors.borderColor,
+                              color: selected
+                                  ? AppColors.espresso
+                                  : AppColors.borderColor,
                               width: 0.5),
                         ),
                         child: AppText(cat,
                             size: 11,
-                            weight: selected ? FontWeight.w700 : FontWeight.normal,
-                            color: selected ? AppColors.goldLight : AppColors.brown2),
+                            weight:
+                                selected ? FontWeight.w700 : FontWeight.normal,
+                            color: selected
+                                ? AppColors.goldLight
+                                : AppColors.brown2),
                       ),
                     );
                   },
@@ -154,7 +223,9 @@ class _MenuScreenState extends State<MenuScreen> {
               ),
               Expanded(
                 child: filtered.isEmpty
-                    ? const EmptyState(message: 'No menu items found', icon: Icons.menu_book_outlined)
+                    ? const EmptyState(
+                        message: 'No menu items found',
+                        icon: Icons.menu_book_outlined)
                     : ListView.builder(
                         padding: const EdgeInsets.all(10),
                         itemCount: filtered.length,
@@ -165,38 +236,56 @@ class _MenuScreenState extends State<MenuScreen> {
                             decoration: BoxDecoration(
                               color: AppColors.white,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.borderColor, width: 0.5),
+                              border: Border.all(
+                                  color: AppColors.borderColor, width: 0.5),
                             ),
                             child: ListTile(
-                              leading: Text(item.icon, style: const TextStyle(fontSize: 26)),
-                              title: AppText(item.name, size: 14, weight: FontWeight.w700),
-                              subtitle: AppText('${item.category} • ${item.badge}', size: 12, color: AppColors.textMuted),
+                              leading: Text(item.icon,
+                                  style: const TextStyle(fontSize: 26)),
+                              title: AppText(item.name,
+                                  size: 14, weight: FontWeight.w700),
+                              subtitle: AppText(
+                                  '${item.category} • ${item.badge}',
+                                  size: 12,
+                                  color: AppColors.textMuted),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  AppText('₱${item.price.toStringAsFixed(2)}', size: 13, weight: FontWeight.w600),
+                                  AppText('₱${item.price.toStringAsFixed(2)}',
+                                      size: 13, weight: FontWeight.w600),
                                   if (isAdmin) ...[
                                     const SizedBox(width: 12),
                                     IconButton(
-                                      icon: const Icon(Icons.edit_outlined, size: 20),
-                                      onPressed: () => _showAddEditDialog(context, item: item),
+                                      icon: const Icon(Icons.edit_outlined,
+                                          size: 20),
+                                      onPressed: () => _showAddEditDialog(
+                                          context,
+                                          item: item),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 20),
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 20),
                                       onPressed: () async {
-                                        final confirmed = await showDialog<bool>(
+                                        final confirmed =
+                                            await showDialog<bool>(
                                           context: context,
                                           builder: (_) => AlertDialog(
-                                            title: const Text('Delete Menu Item?'),
-                                            content: Text('Remove "${item.name}" from the menu?'),
+                                            title:
+                                                const Text('Delete Menu Item?'),
+                                            content: Text(
+                                                'Remove "${item.name}" from the menu?'),
                                             actions: [
                                               TextButton(
-                                                onPressed: () => Navigator.pop(context, false),
+                                                onPressed: () => Navigator.pop(
+                                                    context, false),
                                                 child: const Text('Cancel'),
                                               ),
                                               TextButton(
-                                                onPressed: () => Navigator.pop(context, true),
-                                                child: const Text('Delete', style: TextStyle(color: AppColors.red)),
+                                                onPressed: () => Navigator.pop(
+                                                    context, true),
+                                                child: const Text('Delete',
+                                                    style: TextStyle(
+                                                        color: AppColors.red)),
                                               ),
                                             ],
                                           ),
@@ -238,12 +327,15 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
   late final TextEditingController _priceCtrl;
   late final TextEditingController _iconCtrl;
   late final TextEditingController _badgeCtrl;
-  String _category = 'Hot Coffee';
+  String _category = 'Coffee-espresso base';
   bool _available = true;
   bool _saving = false;
 
   static const _categories = [
-    'Hot Coffee', 'Cold Drinks', 'Pastries', 'Add-ons'
+    'Coffee-espresso base',
+    'Cloud series',
+    'Soda base',
+    'Lemonade-freshly squeeze'
   ];
 
   @override
@@ -251,10 +343,11 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
     super.initState();
     final item = widget.item;
     _nameCtrl = TextEditingController(text: item?.name ?? '');
-    _priceCtrl = TextEditingController(text: item?.price.toStringAsFixed(2) ?? '');
+    _priceCtrl =
+        TextEditingController(text: item?.price.toStringAsFixed(2) ?? '');
     _iconCtrl = TextEditingController(text: item?.icon ?? '☕');
     _badgeCtrl = TextEditingController(text: item?.badge ?? '');
-    _category = item?.category ?? 'Hot Coffee';
+    _category = item?.category ?? _categories.first;
     _available = item?.available ?? true;
   }
 
@@ -317,7 +410,8 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(isEditing ? 'Edit Menu Item' : 'Add Menu Item',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
             Form(
               key: _formKey,
@@ -326,12 +420,15 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                   TextFormField(
                     controller: _nameCtrl,
                     decoration: const InputDecoration(labelText: 'Name'),
-                    validator: (value) => value?.trim().isEmpty == true ? 'Enter a menu name' : null,
+                    validator: (value) => value?.trim().isEmpty == true
+                        ? 'Enter a menu name'
+                        : null,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: _priceCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(labelText: 'Price'),
                     validator: (value) {
                       final price = double.tryParse(value ?? '');
@@ -349,7 +446,8 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: _badgeCtrl,
-                    decoration: const InputDecoration(labelText: 'Badge (optional)'),
+                    decoration:
+                        const InputDecoration(labelText: 'Badge (optional)'),
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(

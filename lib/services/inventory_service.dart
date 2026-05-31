@@ -42,23 +42,29 @@ class InventoryService {
   }
 
   Future<void> seedInventoryIfEmpty() async {
-    if (_inventory.isNotEmpty) return;
+    if (_inventory.isEmpty) {
+      await _seedCupInventory();
+      return;
+    }
 
+    final cupNames = {'cups 12oz', 'cups 16oz'};
+    final onlyCups = _inventory.values.cast<Map>().every((value) {
+      final map = Map<String, dynamic>.from(value);
+      final name = (map['name'] as String? ?? '').toLowerCase();
+      final unit = map['unit'] as String? ?? '';
+      return cupNames.contains(name) && unit == 'pcs';
+    });
+
+    if (!onlyCups) {
+      await _inventory.clear();
+      await _seedCupInventory();
+    }
+  }
+
+  Future<void> _seedCupInventory() async {
     final seedItems = [
-      {'name': 'Coffee Beans (Arabica)', 'unit': 'kg', 'quantity': 10.0, 'lowStockThreshold': 2.0, 'costPerUnit': 800.0, 'category': 'Raw Materials'},
-      {'name': 'Espresso Blend', 'unit': 'kg', 'quantity': 5.0, 'servedQuantity': 0.0, 'lowStockThreshold': 1.0, 'costPerUnit': 950.0, 'category': 'Raw Materials'},
-      {'name': 'Whole Milk', 'unit': 'L', 'quantity': 20.0, 'servedQuantity': 0.0, 'lowStockThreshold': 5.0, 'costPerUnit': 65.0, 'category': 'Dairy'},
-      {'name': 'Oat Milk', 'unit': 'L', 'quantity': 6.0, 'servedQuantity': 0.0, 'lowStockThreshold': 2.0, 'costPerUnit': 120.0, 'category': 'Dairy'},
-      {'name': 'Sugar', 'unit': 'kg', 'quantity': 8.0, 'servedQuantity': 0.0, 'lowStockThreshold': 2.0, 'costPerUnit': 60.0, 'category': 'Dry Goods'},
-      {'name': 'Vanilla Syrup', 'unit': 'bottle', 'quantity': 4.0, 'servedQuantity': 0.0, 'lowStockThreshold': 1.0, 'costPerUnit': 250.0, 'category': 'Syrups'},
-      {'name': 'Caramel Sauce', 'unit': 'bottle', 'quantity': 3.0, 'servedQuantity': 0.0, 'lowStockThreshold': 1.0, 'costPerUnit': 220.0, 'category': 'Syrups'},
-      {'name': 'Chocolate Powder', 'unit': 'kg', 'quantity': 2.0, 'lowStockThreshold': 0.5, 'costPerUnit': 400.0, 'category': 'Dry Goods'},
-      {'name': 'Cups (Medium)', 'unit': 'pcs', 'quantity': 200.0, 'servedQuantity': 0.0, 'lowStockThreshold': 50.0, 'costPerUnit': 4.0, 'category': 'Packaging'},
-      {'name': 'Cups (Large)', 'unit': 'pcs', 'quantity': 150.0, 'servedQuantity': 0.0, 'lowStockThreshold': 40.0, 'costPerUnit': 5.0, 'category': 'Packaging'},
-      {'name': 'Lids', 'unit': 'pcs', 'quantity': 300.0, 'servedQuantity': 0.0, 'lowStockThreshold': 80.0, 'costPerUnit': 2.0, 'category': 'Packaging'},
-      {'name': 'Croissants', 'unit': 'pcs', 'quantity': 20.0, 'servedQuantity': 0.0, 'lowStockThreshold': 5.0, 'costPerUnit': 45.0, 'category': 'Pastries'},
-      {'name': 'Muffins', 'unit': 'pcs', 'quantity': 15.0, 'servedQuantity': 0.0, 'lowStockThreshold': 4.0, 'costPerUnit': 40.0, 'category': 'Pastries'},
-      {'name': 'Cheesecake Slice', 'unit': 'pcs', 'quantity': 10.0, 'servedQuantity': 0.0, 'lowStockThreshold': 3.0, 'costPerUnit': 70.0, 'category': 'Pastries'},
+      {'name': 'Cups 12oz', 'unit': 'pcs', 'quantity': 200.0, 'servedQuantity': 0.0, 'lowStockThreshold': 20.0, 'costPerUnit': 4.0, 'category': 'Packaging'},
+      {'name': 'Cups 16oz', 'unit': 'pcs', 'quantity': 150.0, 'servedQuantity': 0.0, 'lowStockThreshold': 20.0, 'costPerUnit': 5.0, 'category': 'Packaging'},
     ];
 
     for (final item in seedItems) {

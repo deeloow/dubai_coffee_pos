@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import 'local_order_socket_service.dart';
+import 'order_service.dart';
 
 class LocalOrderSocketProvider extends ChangeNotifier {
   final LocalOrderSocketService _socketService = LocalOrderSocketService();
@@ -84,11 +84,12 @@ class LocalOrderSocketProvider extends ChangeNotifier {
 
   Future<bool> startServer({int port = 4567}) async {
     try {
-      _isServer = true;
       _status = 'starting';
       _error = null;
       notifyListeners();
       await _socketService.startServer(port: port);
+      // mark server mode only after successful start
+      _isServer = true;
       _localAddress = _socketService.localAddress;
       _port = _socketService.port;
       _host = _localAddress;
@@ -98,6 +99,8 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     } catch (error) {
       _error = error.toString();
       _status = 'error';
+      // ensure we are not marked as server on failure
+      _isServer = false;
       notifyListeners();
       return false;
     }
@@ -165,21 +168,17 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     _status = 'idle';
     _error = null;
     _connectedPeers.clear();
+    // clear server flag when stopped
+    _isServer = false;
     notifyListeners();
   }
 
   Future<void> _saveReceivedOrder(Order order) async {
     try {
-      final box = Hive.box('orders');
       final id = order.id.isNotEmpty ? order.id : _uuid.v4();
-      if (box.containsKey(id)) {
-        return;
-      }
-      final orderMap = {
-        ...order.toMap(),
-        'id': id,
-      };
-      await box.put(id, orderMap);
+      final orderToSave = order.copyWith(id: id);
+      final orderService = OrderService();
+      await orderService.saveOrder(orderToSave);
     } catch (error) {
       // Ignore persistence failures for received orders.
     }

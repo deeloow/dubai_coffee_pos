@@ -8,6 +8,40 @@ class OrderService {
   final Uuid _uuid = const Uuid();
   final RecipeService _recipeService = RecipeService();
 
+  List<Order> _orderList({int? limit}) {
+    final orders = _orders.values
+        .cast<Map>()
+        .map((item) => Order.fromMap(Map<String, dynamic>.from(item)))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (limit != null && limit < orders.length) {
+      return orders.take(limit).toList();
+    }
+    return orders;
+  }
+
+  Stream<List<Order>> ordersStream({int? limit}) async* {
+    yield _orderList(limit: limit);
+
+    await for (final _ in _orders.watch()) {
+      yield _orderList(limit: limit);
+    }
+  }
+
+  Future<List<Order>> fetchOrders({int? limit, int offset = 0}) async {
+    final allOrders = _orderList();
+    if (offset >= allOrders.length) {
+      return [];
+    }
+    final page = allOrders.skip(offset);
+    return limit != null ? page.take(limit).toList() : page.toList();
+  }
+
+  Future<int> getOrderCount() async {
+    return _orders.length;
+  }
+
   Future<String> saveOrder(Order order) async {
     final id = order.id.isEmpty ? _uuid.v4() : order.id;
     final alreadyExists = _orders.containsKey(id);
@@ -31,22 +65,6 @@ class OrderService {
 
   Future<bool> orderExists(String orderId) async {
     return _orders.containsKey(orderId);
-  }
-
-  Stream<List<Order>> ordersStream() async* {
-    yield _orders.values
-        .cast<Map>()
-        .map((item) => Order.fromMap(Map<String, dynamic>.from(item)))
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    await for (final _ in _orders.watch()) {
-      yield _orders.values
-          .cast<Map>()
-          .map((item) => Order.fromMap(Map<String, dynamic>.from(item)))
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    }
   }
 
   Future<void> voidOrder(String orderId) async {

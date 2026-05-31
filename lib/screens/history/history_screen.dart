@@ -13,10 +13,14 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  static const int _historyPageSize = 250;
+
   final OrderService _orderSvc = OrderService();
   final _searchCtrl = TextEditingController();
   String _filter = 'all';
   String _search = '';
+  bool _showAllOrders = false;
+  int _historyLimit = _historyPageSize;
 
   @override
   void dispose() {
@@ -47,7 +51,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
-            onSelected: (v) => setState(() => _filter = v),
+            onSelected: (v) => setState(() {
+              _filter = v;
+              _showAllOrders = true;
+              _historyLimit = _historyPageSize;
+            }),
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'all', child: Text('All orders')),
               const PopupMenuItem(value: 'paid', child: Text('Paid only')),
@@ -61,23 +69,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
       body: StreamBuilder<List<Order>>(
-        stream: _orderSvc.ordersStream(),
+        stream: _orderSvc.ordersStream(
+            limit: (_search.isEmpty && _filter == 'all' && !_showAllOrders)
+                ? _historyLimit
+                : null),
+        initialData: const [],
         builder: (ctx, snap) {
-          if (!snap.hasData) {
+          if (snap.hasError) {
             return const Center(
-              child: CircularProgressIndicator(
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(AppColors.gold)),
+              child: Text('Unable to load order history.'),
             );
           }
 
           final allOrders = snap.data!;
-          final paid = allOrders.where((o) => o.status == OrderStatus.paid).toList();
+          final paid =
+              allOrders.where((o) => o.status == OrderStatus.paid).toList();
           final filtered = _filterOrders(allOrders);
+          final loadedOrders = allOrders.length;
+          final visibleOrders = filtered.length;
 
           final totalSales = paid.fold(0.0, (s, o) => s + o.total);
           final avgOrder = paid.isEmpty ? 0.0 : totalSales / paid.length;
-          final voided = allOrders.where((o) => o.status == OrderStatus.voided).length;
+          final voided =
+              allOrders.where((o) => o.status == OrderStatus.voided).length;
 
           return Column(
             children: [
@@ -87,8 +101,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 padding: const EdgeInsets.all(10),
                 child: TextField(
                   controller: _searchCtrl,
-                  onChanged: (v) =>
-                      setState(() => _search = v.toLowerCase()),
+                  onChanged: (v) => setState(() {
+                    _search = v.toLowerCase();
+                    _showAllOrders = true;
+                    _historyLimit = _historyPageSize;
+                  }),
                   decoration: const InputDecoration(
                     hintText: 'Search orders, customers…',
                     prefixIcon: Icon(Icons.search,
@@ -112,16 +129,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         label: 'Total Sales',
                         value: formatPHP(totalSales),
                         gold: true),
-                    StatCard(
-                        label: 'Orders',
-                        value: '${paid.length}'),
-                    StatCard(
-                        label: 'Avg Order',
-                        value: formatPHP(avgOrder)),
-                    StatCard(
-                        label: 'Voided',
-                        value: '$voided',
-                        deltaUp: false),
+                    StatCard(label: 'Orders', value: '${paid.length}'),
+                    StatCard(label: 'Avg Order', value: formatPHP(avgOrder)),
+                    StatCard(label: 'Voided', value: '$voided', deltaUp: false),
                   ],
                 ),
               ),
@@ -129,29 +139,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
               // Filter chip
               if (_filter != 'all')
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.gold.withOpacity(0.15),
+                          color: AppColors.gold.withAlpha((0.15 * 255).toInt()),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           children: [
                             AppText('Filter: $_filter',
-                                size: 12,
-                                color: AppColors.goldDark),
+                                size: 12, color: AppColors.goldDark),
                             const SizedBox(width: 4),
                             GestureDetector(
-                              onTap: () =>
-                                  setState(() => _filter = 'all'),
+                              onTap: () => setState(() {
+                                _filter = 'all';
+                                _historyLimit = _historyPageSize;
+                                _showAllOrders = false;
+                              }),
                               child: const Icon(Icons.close,
-                                  size: 14,
-                                  color: AppColors.goldDark),
+                                  size: 14, color: AppColors.goldDark),
                             ),
                           ],
                         ),
@@ -161,6 +172,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
 
               // Orders list
+              if (!_showAllOrders && allOrders.length >= _historyLimit)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: AppText(
+                          'Showing $visibleOrders of $loadedOrders loaded orders. Load more to see older orders.',
+                          size: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _historyLimit += _historyPageSize;
+                          if (_historyLimit >= allOrders.length) {
+                            _showAllOrders = true;
+                          }
+                        }),
+                        child: const Text('Load more'),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: filtered.isEmpty
                     ? const EmptyState(
@@ -169,12 +205,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : ListView.builder(
                         padding: const EdgeInsets.all(10),
                         itemCount: filtered.length,
-                        itemBuilder: (_, i) =>
-                            _OrderTile(
+                        itemBuilder: (_, i) => _OrderTile(
                           order: filtered[i],
                           onVoid: () async {
-                            await _orderSvc
-                                .voidOrder(filtered[i].id);
+                            await _orderSvc.voidOrder(filtered[i].id);
                           },
                         ),
                       ),
@@ -203,18 +237,15 @@ class _OrderTile extends StatelessWidget {
         border: Border.all(color: AppColors.borderColor, width: 0.5),
       ),
       child: ExpansionTile(
-        tilePadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.bgLight,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: AppText(
-              '#${order.orderNumber.toString().padLeft(3, '0')}',
-              size: 11,
-              weight: FontWeight.w600),
+          child: AppText('#${order.orderNumber.toString().padLeft(3, '0')}',
+              size: 11, weight: FontWeight.w600),
         ),
         title: Row(
           children: [
@@ -227,17 +258,13 @@ class _OrderTile extends StatelessWidget {
             ),
           ],
         ),
-        subtitle: AppText(
-            DateFormat('MMM d • h:mm a').format(order.createdAt),
-            size: 11,
-            color: AppColors.textMuted),
+        subtitle: AppText(DateFormat('MMM d • h:mm a').format(order.createdAt),
+            size: 11, color: AppColors.textMuted),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             AppText(formatPHP(order.total),
-                size: 13,
-                weight: FontWeight.w600,
-                color: AppColors.goldDark),
+                size: 13, weight: FontWeight.w600, color: AppColors.goldDark),
             const SizedBox(width: 8),
             StatusBadge(
                 label: order.statusLabel,
@@ -254,20 +281,16 @@ class _OrderTile extends StatelessWidget {
 
                 // Items
                 ...order.items.map((item) => Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(vertical: 3),
                       child: Row(
                         children: [
-                          Text(item.icon,
-                              style: const TextStyle(fontSize: 14)),
+                          Text(item.icon, style: const TextStyle(fontSize: 14)),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: AppText(
-                                '${item.name} × ${item.qty}',
-                                size: 12),
+                            child:
+                                AppText('${item.name} × ${item.qty}', size: 12),
                           ),
-                          AppText(formatPHP(item.price * item.qty),
-                              size: 12),
+                          AppText(formatPHP(item.price * item.qty), size: 12),
                         ],
                       ),
                     )),
@@ -281,14 +304,10 @@ class _OrderTile extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AppText(
-                              'Payment: ${order.paymentMethodLabel}',
-                              size: 11,
-                              color: AppColors.textMuted),
-                          AppText(
-                              'Cashier: ${order.cashierName}',
-                              size: 11,
-                              color: AppColors.textMuted),
+                          AppText('Payment: ${order.paymentMethodLabel}',
+                              size: 11, color: AppColors.textMuted),
+                          AppText('Cashier: ${order.cashierName}',
+                              size: 11, color: AppColors.textMuted),
                         ],
                       ),
                     ),
@@ -303,8 +322,7 @@ class _OrderTile extends StatelessWidget {
                                   'Void order #${order.orderNumber.toString().padLeft(3, '0')} for ${order.customerName}?'),
                               actions: [
                                 TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context),
+                                  onPressed: () => Navigator.pop(context),
                                   child: const Text('Cancel'),
                                 ),
                                 TextButton(
@@ -313,8 +331,7 @@ class _OrderTile extends StatelessWidget {
                                     onVoid();
                                   },
                                   child: const Text('Void',
-                                      style: TextStyle(
-                                          color: AppColors.red)),
+                                      style: TextStyle(color: AppColors.red)),
                                 ),
                               ],
                             ),

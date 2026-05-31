@@ -18,17 +18,22 @@ class PosScreen extends StatefulWidget {
 }
 
 class _PosScreenState extends State<PosScreen> {
+
   final MenuService _menuSvc = MenuService();
   final _searchCtrl = TextEditingController();
 
   static const categories = [
-    'Hot Coffee', 'Cold Drinks', 'Pastries', 'Add-ons'
+    'Coffee-espresso base',
+    'Cloud series',
+    'Soda base',
+    'Lemonade-freshly squeeze'
   ];
 
   @override
   void initState() {
     super.initState();
-    _menuSvc.seedMenuIfEmpty();
+    // Always reset menu to standard seed when Cashier page loads
+    _menuSvc.replaceMenuWithStandardSeed();
   }
 
   @override
@@ -82,7 +87,8 @@ class _PosScreenState extends State<PosScreen> {
         actions: [
           IconButton(
             onPressed: () => _showReceiptList(context),
-            icon: const Icon(Icons.receipt_long_outlined, color: AppColors.goldLight),
+            icon: const Icon(Icons.receipt_long_outlined,
+                color: AppColors.goldLight),
             tooltip: 'Receipt list',
           ),
           if (pos.hasCustomer)
@@ -90,8 +96,8 @@ class _PosScreenState extends State<PosScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.darkBrown,
                     borderRadius: BorderRadius.circular(20),
@@ -134,8 +140,8 @@ class _PosScreenState extends State<PosScreen> {
               onTap: () => _showCustomerSheet(context),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 color: const Color(0xFFFFF8E1),
                 child: const Row(
                   children: [
@@ -159,14 +165,13 @@ class _PosScreenState extends State<PosScreen> {
             child: TextField(
               controller: _searchCtrl,
               onChanged: pos.setSearchQuery,
-              style: const TextStyle(
-                  fontSize: 13, color: AppColors.espresso),
+              style: const TextStyle(fontSize: 13, color: AppColors.espresso),
               decoration: InputDecoration(
                 hintText: 'Search menu...',
                 prefixIcon: const Icon(Icons.search,
                     size: 18, color: AppColors.textMuted),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 suffixIcon: pos.searchQuery.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear,
@@ -201,19 +206,14 @@ class _PosScreenState extends State<PosScreen> {
                       margin: const EdgeInsets.symmetric(
                           horizontal: 2, vertical: 6),
                       decoration: BoxDecoration(
-                        color: active
-                            ? AppColors.espresso
-                            : Colors.transparent,
+                        color: active ? AppColors.espresso : Colors.transparent,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: AppText(cat,
                           size: 12,
-                          weight: active
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: active
-                              ? AppColors.goldLight
-                              : AppColors.brown2),
+                          weight: active ? FontWeight.w600 : FontWeight.normal,
+                          color:
+                              active ? AppColors.goldLight : AppColors.brown2),
                     ),
                   );
                 },
@@ -224,12 +224,11 @@ class _PosScreenState extends State<PosScreen> {
           Expanded(
             child: StreamBuilder<List<MenuItem>>(
               stream: _menuSvc.menuStream(),
+              initialData: const [],
               builder: (ctx, snap) {
-                if (!snap.hasData) {
+                if (snap.hasError) {
                   return const Center(
-                    child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.gold)),
+                    child: Text('Unable to load menu items.'),
                   );
                 }
 
@@ -242,6 +241,8 @@ class _PosScreenState extends State<PosScreen> {
                           .toLowerCase()
                           .contains(pos.searchQuery.toLowerCase()))
                       .toList();
+                } else if (pos.currentCategory == 'All') {
+                  items = allItems;
                 } else {
                   items = allItems
                       .where((i) => i.category == pos.currentCategory)
@@ -256,8 +257,7 @@ class _PosScreenState extends State<PosScreen> {
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(10),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
@@ -272,14 +272,11 @@ class _PosScreenState extends State<PosScreen> {
                         return;
                       }
                       pos.addItem(items[i]);
-                      ScaffoldMessenger.of(context)
-                          .clearSnackBars();
+                      ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                              '${items[i].name} added'),
-                          duration:
-                              const Duration(milliseconds: 800),
+                          content: Text('${items[i].name} added'),
+                          duration: const Duration(milliseconds: 800),
                           backgroundColor: AppColors.espresso,
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -303,16 +300,13 @@ class _PosScreenState extends State<PosScreen> {
                   color: AppColors.goldLight),
               label: Row(
                 children: [
-                  AppText(
-                      '${pos.items.fold(0, (s, i) => s + i.qty)} items',
+                  AppText('${pos.items.fold(0, (s, i) => s + i.qty)} items',
                       size: 12,
                       weight: FontWeight.w600,
                       color: AppColors.goldLight),
                   const SizedBox(width: 8),
                   AppText(formatPHP(pos.total),
-                      size: 13,
-                      weight: FontWeight.w700,
-                      color: AppColors.gold),
+                      size: 13, weight: FontWeight.w700, color: AppColors.gold),
                 ],
               ),
             ),
@@ -347,9 +341,7 @@ class _MenuCard extends StatelessWidget {
                   Text(item.icon,
                       style: TextStyle(
                           fontSize: 26,
-                          color: item.available
-                              ? null
-                              : Colors.grey)),
+                          color: item.available ? null : Colors.grey)),
                   const SizedBox(height: 4),
                   AppText(item.name,
                       size: 10,
@@ -373,8 +365,8 @@ class _MenuCard extends StatelessWidget {
                 top: 5,
                 right: 5,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 5, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
                     color: AppColors.gold,
                     borderRadius: BorderRadius.circular(4),
@@ -394,8 +386,7 @@ class _MenuCard extends StatelessWidget {
                   ),
                   child: const Center(
                     child: AppText('Unavailable',
-                        size: 10,
-                        color: AppColors.textMuted),
+                        size: 10, color: AppColors.textMuted),
                   ),
                 ),
               ),
