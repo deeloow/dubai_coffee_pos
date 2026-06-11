@@ -2,9 +2,31 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 
+List<RecipeIngredient> fallbackRecipeIngredientsForOrderItem(
+  OrderItem orderItem, {
+  String category = '',
+}) {
+  final normalizedName = orderItem.name.toLowerCase();
+  final normalizedCategory = category.toLowerCase();
+  final isSixteenOz = normalizedName.contains('16oz') ||
+      normalizedCategory.contains('cloud') ||
+      normalizedCategory.contains('soda') ||
+      normalizedCategory.contains('lemonade');
+  final cupName = isSixteenOz ? 'Cups 16oz' : 'Cups 12oz';
+
+  return [
+    RecipeIngredient(
+      inventoryItemId: '',
+      inventoryItemName: cupName,
+      quantityNeeded: 1.0,
+    ),
+  ];
+}
+
 class RecipeService {
   final Box _recipes = Hive.box('recipes');
   final Box _inventory = Hive.box('inventory');
+  final Box _menu = Hive.box('menu');
   final Uuid _uuid = const Uuid();
 
   // Get all recipes
@@ -54,11 +76,11 @@ class RecipeService {
 
   Future<bool> renameRecipeForMenuItem(String oldName, String newName) async {
     final normalizedOld = _normalizeMenuName(oldName);
-    final key = _recipes.keys.cast<String>().firstWhere(
+      final key = _recipes.keys.cast<String>().firstWhere(
       (id) {
         final raw = _recipes.get(id);
         if (raw == null) return false;
-        final recipe = Recipe.fromMap(Map<String, dynamic>.from(raw as Map<String, dynamic>));
+        final recipe = Recipe.fromMap(Map<String, dynamic>.from(raw as Map));
         return _normalizeMenuName(recipe.menuItemName) == normalizedOld;
       },
       orElse: () => '',
@@ -68,7 +90,7 @@ class RecipeService {
     }
     final raw = _recipes.get(key);
     if (raw == null) return false;
-    final recipe = Recipe.fromMap(Map<String, dynamic>.from(raw as Map<String, dynamic>), id: key);
+    final recipe = Recipe.fromMap(Map<String, dynamic>.from(raw as Map), id: key);
     final updated = Recipe(
       id: recipe.id,
       menuItemName: newName,
@@ -156,6 +178,29 @@ class RecipeService {
     }
   }
 
+  List<RecipeIngredient> buildFallbackRecipeIngredients(
+    OrderItem orderItem, {
+    String category = '',
+  }) {
+    return fallbackRecipeIngredientsForOrderItem(orderItem, category: category);
+  }
+
+  Future<List<RecipeIngredient>> _resolveIngredients(OrderItem orderItem) async {
+    final recipe = await getRecipeByMenuItemName(orderItem.name);
+    if (recipe != null && recipe.ingredients.isNotEmpty) {
+      return recipe.ingredients;
+    }
+
+    final foundMenu = orderItem.menuItemId.isNotEmpty
+        ? _menu.get(orderItem.menuItemId)
+        : null;
+    final category = foundMenu != null
+        ? (Map<String, dynamic>.from(foundMenu as Map)['category'] as String? ?? '')
+        : '';
+
+    return fallbackRecipeIngredientsForOrderItem(orderItem, category: category);
+  }
+
   // Deduct inventory for an order
   // Returns false if any ingredient is out of stock, true if successful
   Future<String?> deductInventoryForOrder(List<OrderItem> items) async {
@@ -164,14 +209,14 @@ class RecipeService {
       final invMap = _inventory.get(inventoryItemId);
       if (invMap != null) {
         return MapEntry(inventoryItemId,
-            Map<String, dynamic>.from(invMap as Map<String, dynamic>));
+        Map<String, dynamic>.from(invMap as Map));
       }
 
       final lowerName = inventoryItemName.toLowerCase();
       for (final key in _inventory.keys.cast<String>()) {
-        final value = _inventory.get(key);
-        if (value == null) continue;
-        final map = Map<String, dynamic>.from(value as Map<String, dynamic>);
+      final value = _inventory.get(key);
+      if (value == null) continue;
+      final map = Map<String, dynamic>.from(value as Map);
         final name = (map['name'] as String? ?? '').toLowerCase();
         if (name == lowerName) {
           return MapEntry(key, map);
@@ -182,13 +227,12 @@ class RecipeService {
 
     // First, check if all items have enough inventory
     for (final orderItem in items) {
-      final recipe = await getRecipeByMenuItemName(orderItem.name);
-      if (recipe == null) {
-        // No recipe defined for this item, skip inventory deduction
+      final ingredients = await _resolveIngredients(orderItem);
+      if (ingredients.isEmpty) {
         continue;
       }
 
-      for (final ingredient in recipe.ingredients) {
+      for (final ingredient in ingredients) {
         final invEntry = findInventory(
           ingredient.inventoryItemId,
           ingredient.inventoryItemName,
@@ -209,10 +253,12 @@ class RecipeService {
 
     // All items have enough stock, now deduct them
     for (final orderItem in items) {
-      final recipe = await getRecipeByMenuItemName(orderItem.name);
-      if (recipe == null) continue;
+      final ingredients = await _resolveIngredients(orderItem);
+      if (ingredients.isEmpty) {
+        continue;
+      }
 
-      for (final ingredient in recipe.ingredients) {
+      for (final ingredient in ingredients) {
         final invEntry = findInventory(
           ingredient.inventoryItemId,
           ingredient.inventoryItemName,

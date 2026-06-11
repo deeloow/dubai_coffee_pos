@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
@@ -5,6 +7,7 @@ import '../../services/pos_provider.dart';
 import '../../services/order_service.dart';
 import '../../services/local_order_socket_provider.dart';
 import '../../services/auth_provider.dart';
+import '../../services/settings_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'receipt_sheet.dart';
@@ -67,6 +70,7 @@ class _CartSheetState extends State<CartSheet> {
   Future<void> _showGcashDialog(
       BuildContext context, AuthProvider auth) async {
     final pos = context.read<PosProvider>();
+    final qrFile = await SettingsService().loadPaymentQrCodeFile();
 
     await showDialog(
       context: context,
@@ -95,9 +99,20 @@ class _CartSheetState extends State<CartSheet> {
                 border: Border.all(
                     color: AppColors.borderColor, width: 0.5),
               ),
-              child: const Center(
-                child: Icon(Icons.qr_code, size: 110, color: AppColors.espresso),
-              ),
+              child: qrFile != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        qrFile,
+                        fit: BoxFit.cover,
+                        width: 180,
+                        height: 180,
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(Icons.qr_code,
+                          size: 110, color: AppColors.espresso),
+                    ),
             ),
             const SizedBox(height: 14),
             const AppText('Owner/Admin GCash QR',
@@ -241,7 +256,6 @@ class _CartSheetState extends State<CartSheet> {
         subtotal: pos.subtotal,
         discount: pos.discountAmount,
         discountLabel: pos.discount.label,
-        vat: pos.vat,
         total: pos.total,
         tendered: tendered,
         change: change,
@@ -261,7 +275,6 @@ class _CartSheetState extends State<CartSheet> {
         subtotal: order.subtotal,
         discount: order.discount,
         discountLabel: order.discountLabel,
-        vat: order.vat,
         total: order.total,
         tendered: order.tendered,
         change: order.change,
@@ -514,9 +527,6 @@ class _CartSheetState extends State<CartSheet> {
                             left: pos.discount.label,
                             right: '−${formatPHP(pos.discountAmount)}',
                             isDiscount: true),
-                      DividerRow(
-                          left: 'VAT (12%)',
-                          right: formatPHP(pos.vat)),
                       const Divider(
                           height: 16,
                           color: AppColors.borderColor),

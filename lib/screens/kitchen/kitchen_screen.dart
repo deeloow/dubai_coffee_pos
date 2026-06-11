@@ -87,7 +87,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
         ],
       ),
       body: StreamBuilder<List<Order>>(
-        stream: _orderSvc.ordersStream(),
+        stream: _orderSvc.ordersStream(includeArchived: false),
         initialData: const [],
         builder: (ctx, snap) {
           if (snap.hasError) {

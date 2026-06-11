@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../services/auth_provider.dart';
 import '../../services/order_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
+
+bool matchesHistoryFilter(Order order, String rawFilter) {
+  final normalizedFilter = rawFilter.trim().toLowerCase();
+  final paymentLabel = order.paymentMethodLabel.toLowerCase();
+
+  return normalizedFilter == 'all' ||
+      (normalizedFilter == 'paid' && order.status == OrderStatus.paid) ||
+      (normalizedFilter == 'void' && order.status == OrderStatus.voided) ||
+      paymentLabel == normalizedFilter;
+}
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -34,11 +46,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           o.customerName.toLowerCase().contains(_search) ||
           o.orderNumber.toString().contains(_search) ||
           o.items.any((i) => i.name.toLowerCase().contains(_search));
-      final matchFilter = _filter == 'all' ||
-          (_filter == 'paid' && o.status == OrderStatus.paid) ||
-          (_filter == 'void' && o.status == OrderStatus.voided) ||
-          o.paymentMethodLabel.toLowerCase() == _filter;
-      return matchSearch && matchFilter;
+      return matchSearch && matchesHistoryFilter(o, _filter);
     }).toList();
   }
 
@@ -62,8 +70,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const PopupMenuItem(value: 'void', child: Text('Voided only')),
               const PopupMenuItem(value: 'Cash', child: Text('Cash')),
               const PopupMenuItem(value: 'GCash', child: Text('GCash')),
-              const PopupMenuItem(value: 'Card', child: Text('Card')),
-              const PopupMenuItem(value: 'PayMaya', child: Text('PayMaya')),
             ],
           ),
         ],
@@ -81,6 +87,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             );
           }
 
+          final auth = context.watch<AuthProvider>();
           final allOrders = snap.data!;
           final paid =
               allOrders.where((o) => o.status == OrderStatus.paid).toList();
@@ -207,8 +214,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         itemCount: filtered.length,
                         itemBuilder: (_, i) => _OrderTile(
                           order: filtered[i],
+                          canVoid: auth.isAdmin,
                           onVoid: () async {
-                            await _orderSvc.voidOrder(filtered[i].id);
+                            final reason = await showDialog<String>(
+                              context: context,
+                              builder: (ctx) {
+                                final controller = TextEditingController();
+                                return AlertDialog(
+                                  title: const Text('Void Order'),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                          'Provide a reason before voiding this order.'),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: controller,
+                                        autofocus: true,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Void reason',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        minLines: 2,
+                                        maxLines: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        if (controller.text.trim().isEmpty) {
+                                          return;
+                                        }
+                                        Navigator.pop(ctx, controller.text.trim());
+                                      },
+                                      child: const Text('Void',
+                                          style: TextStyle(color: AppColors.red)),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                            if (reason != null && reason.isNotEmpty) {
+                              await _orderSvc.voidOrder(filtered[i].id,
+                                  reason: reason);
+                            }
                           },
                         ),
                       ),
@@ -224,8 +278,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 class _OrderTile extends StatelessWidget {
   final Order order;
   final VoidCallback onVoid;
+  final bool canVoid;
 
-  const _OrderTile({required this.order, required this.onVoid});
+  const _OrderTile({required this.order, required this.onVoid, required this.canVoid});
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +334,24 @@ class _OrderTile extends StatelessWidget {
               children: [
                 const Divider(height: 12, color: AppColors.borderColor),
 
+                if (order.status == OrderStatus.voided && order.voidReason != null && order.voidReason!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8EBEB),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: AppText(
+                        'Void reason: ${order.voidReason}',
+                        size: 12,
+                        color: AppColors.red,
+                      ),
+                    ),
+                  ),
+
                 // Items
                 ...order.items.map((item) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
@@ -306,36 +379,15 @@ class _OrderTile extends StatelessWidget {
                         children: [
                           AppText('Payment: ${order.paymentMethodLabel}',
                               size: 11, color: AppColors.textMuted),
-                          AppText('Cashier: ${order.cashierName}',
+                          AppText('Barista: ${order.cashierName.isNotEmpty ? order.cashierName : 'Unknown'}',
                               size: 11, color: AppColors.textMuted),
                         ],
                       ),
                     ),
-                    if (order.status == OrderStatus.paid)
+                    if (order.status == OrderStatus.paid && canVoid)
                       GestureDetector(
                         onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Void Order?'),
-                              content: Text(
-                                  'Void order #${order.orderNumber.toString().padLeft(3, '0')} for ${order.customerName}?'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    onVoid();
-                                  },
-                                  child: const Text('Void',
-                                      style: TextStyle(color: AppColors.red)),
-                                ),
-                              ],
-                            ),
-                          );
+                          onVoid();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(

@@ -255,7 +255,6 @@ class LocalOrderSocketService {
       subtotal: total,
       discount: 0,
       discountLabel: '',
-      vat: 0,
       total: total,
       tendered: total,
       change: 0,
@@ -319,23 +318,55 @@ class LocalOrderSocketService {
         includeLoopback: false,
       );
 
+      final candidates = <MapEntry<NetworkInterface, InternetAddress>>[];
       for (final interface in interfaces) {
         for (final address in interface.addresses) {
-          if (address.type == InternetAddressType.IPv4 &&
-              !address.isLoopback) {
-            final raw = address.address;
-            if (raw.startsWith('10.') ||
-                raw.startsWith('192.168.') ||
-                raw.startsWith('172.')) {
-              return raw;
-            }
+          if (address.type == InternetAddressType.IPv4 && !address.isLoopback) {
+            candidates.add(MapEntry(interface, address));
           }
         }
       }
+
+      if (candidates.isEmpty) {
+        return '0.0.0.0';
+      }
+
+      candidates.sort((a, b) {
+        final rankA = _rankAddress(a.key.name, a.value.address);
+        final rankB = _rankAddress(b.key.name, b.value.address);
+        return rankA.compareTo(rankB);
+      });
+
+      return candidates.first.value.address;
     } catch (_) {
       // ignore
     }
     return '0.0.0.0';
+  }
+
+  int _rankAddress(String interfaceName, String address) {
+    var score = 1000;
+    final name = interfaceName.toLowerCase();
+    if (name.contains('wlan') ||
+        name.contains('wifi') ||
+        name.contains('wi-fi') ||
+        name.contains('ap') ||
+        name.contains('softap') ||
+        name.contains('rndis') ||
+        name.contains('en')) {
+      score -= 200;
+    }
+    if (address.startsWith('192.168.')) {
+      score -= 150;
+    } else if (address.startsWith('10.')) {
+      score -= 100;
+    } else if (address.startsWith('172.')) {
+      score -= 50;
+    }
+    if (name.contains('rmnet') || name.contains('wwan') || name.contains('cell')) {
+      score += 250;
+    }
+    return score;
   }
 
   void _setStatus(String status) {

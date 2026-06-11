@@ -33,6 +33,27 @@ class PosProvider extends ChangeNotifier {
   }
 
   // ── Cart ──────────────────────────────────────────────────────────────────
+  String _displayName(MenuItem menuItem) {
+    final category = menuItem.category.trim();
+    final name = menuItem.name.trim();
+
+    if (category.toLowerCase().contains('coffee-espresso base')) {
+      return name;
+    }
+
+    if (category.toLowerCase().contains('cloud')) {
+      return 'Cloud Series - $name';
+    }
+    if (category.toLowerCase().contains('soda')) {
+      return 'Soda - $name';
+    }
+    if (category.toLowerCase().contains('lemonade')) {
+      return 'Lemonade - $name';
+    }
+
+    return '$category - $name';
+  }
+
   void addItem(MenuItem menuItem) {
     final idx = _items.indexWhere((i) => i.menuItemId == menuItem.id);
     if (idx >= 0) {
@@ -40,7 +61,7 @@ class PosProvider extends ChangeNotifier {
     } else {
       _items.add(OrderItem(
         menuItemId: menuItem.id,
-        name: menuItem.name,
+        name: _displayName(menuItem),
         price: menuItem.price,
         icon: menuItem.icon,
         sugarLevel: 'Regular sugar',
@@ -88,9 +109,7 @@ class PosProvider extends ChangeNotifier {
 
   double get discounted => subtotal - discountAmount;
 
-  double get vat => discounted * 0.12;
-
-  double get total => discounted + vat;
+  double get total => discounted;
 
   bool get isEmpty => _items.isEmpty;
   bool get hasCustomer => _customerName.trim().isNotEmpty;

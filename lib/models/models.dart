@@ -253,7 +253,6 @@ class Order {
   final double subtotal;
   final double discount;
   final String discountLabel;
-  final double vat;
   final double total;
   final double tendered;
   final double change;
@@ -261,6 +260,8 @@ class Order {
   final String sugarLevel;
   final bool kitchenCompleted;
   final DateTime createdAt;
+  final String? voidReason;
+  final DateTime? archivedAt;
   OrderStatus status;
 
   Order({
@@ -272,7 +273,6 @@ class Order {
     required this.subtotal,
     required this.discount,
     required this.discountLabel,
-    required this.vat,
     required this.total,
     required this.tendered,
     required this.change,
@@ -281,6 +281,8 @@ class Order {
     this.kitchenCompleted = false,
     required this.createdAt,
     this.status = OrderStatus.paid,
+    this.voidReason,
+    this.archivedAt,
   });
 
   String get paymentMethodLabel {
@@ -316,7 +318,6 @@ class Order {
     double? subtotal,
     double? discount,
     String? discountLabel,
-    double? vat,
     double? total,
     double? tendered,
     double? change,
@@ -325,6 +326,8 @@ class Order {
     bool? kitchenCompleted,
     DateTime? createdAt,
     OrderStatus? status,
+    String? voidReason,
+    DateTime? archivedAt,
   }) {
     return Order(
       id: id ?? this.id,
@@ -335,7 +338,6 @@ class Order {
       subtotal: subtotal ?? this.subtotal,
       discount: discount ?? this.discount,
       discountLabel: discountLabel ?? this.discountLabel,
-      vat: vat ?? this.vat,
       total: total ?? this.total,
       tendered: tendered ?? this.tendered,
       change: change ?? this.change,
@@ -344,6 +346,8 @@ class Order {
       kitchenCompleted: kitchenCompleted ?? this.kitchenCompleted,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
+      voidReason: voidReason ?? this.voidReason,
+      archivedAt: archivedAt ?? this.archivedAt,
     );
   }
 
@@ -356,7 +360,6 @@ class Order {
         'subtotal': subtotal,
         'discount': discount,
         'discountLabel': discountLabel,
-        'vat': vat,
         'total': total,
         'tendered': tendered,
         'change': change,
@@ -365,6 +368,8 @@ class Order {
         'kitchenCompleted': kitchenCompleted,
         'createdAt': createdAt.toIso8601String(),
         'status': status.index,
+        'voidReason': voidReason,
+        'archivedAt': archivedAt?.toIso8601String(),
       };
 
   factory Order.fromMap(Map<String, dynamic> map, {String? id}) => Order(
@@ -373,12 +378,11 @@ class Order {
         customerName: map['customerName'] ?? '',
         cashierName: map['cashierName'] ?? '',
         items: (map['items'] as List<dynamic>? ?? [])
-            .map((i) => OrderItem.fromMap(i as Map<String, dynamic>))
-            .toList(),
+          .map((i) => OrderItem.fromMap(Map<String, dynamic>.from(i as Map)))
+          .toList(),
         subtotal: (map['subtotal'] as num).toDouble(),
         discount: (map['discount'] as num).toDouble(),
         discountLabel: map['discountLabel'] ?? '',
-        vat: (map['vat'] as num).toDouble(),
         total: (map['total'] as num).toDouble(),
         tendered: (map['tendered'] as num).toDouble(),
         change: (map['change'] as num).toDouble(),
@@ -389,6 +393,12 @@ class Order {
             ? map['createdAt'] as DateTime
             : DateTime.parse(map['createdAt'] as String),
         status: OrderStatus.values[map['status'] ?? 0],
+        voidReason: map['voidReason']?.toString(),
+        archivedAt: map['archivedAt'] is DateTime
+            ? map['archivedAt'] as DateTime
+            : map['archivedAt'] != null
+                ? DateTime.tryParse(map['archivedAt'] as String)
+                : null,
       );
 }
 
@@ -493,7 +503,7 @@ class Recipe {
         id: id ?? map['id'] ?? '',
         menuItemName: map['menuItemName'] ?? '',
         ingredients: (map['ingredients'] as List<dynamic>? ?? [])
-            .map((i) => RecipeIngredient.fromMap(i as Map<String, dynamic>))
-            .toList(),
+          .map((i) => RecipeIngredient.fromMap(Map<String, dynamic>.from(i as Map)))
+          .toList(),
       );
 }

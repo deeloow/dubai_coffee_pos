@@ -62,6 +62,27 @@ class ReceiptSheet extends StatelessWidget {
             ],
           ),
 
+          if (order.status == OrderStatus.voided && order.voidReason != null && order.voidReason!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8EBEB),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const AppText('Void reason', size: 11, weight: FontWeight.w600),
+                    const SizedBox(height: 4),
+                    AppText(order.voidReason!, size: 12, color: AppColors.red),
+                  ],
+                ),
+              ),
+            ),
+
           // Customer
           Container(
             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -130,8 +151,6 @@ class ReceiptSheet extends StatelessWidget {
                 left: order.discountLabel,
                 right: '−${formatPHP(order.discount)}',
                 isDiscount: true),
-          DividerRow(
-              left: 'VAT (12%)', right: formatPHP(order.vat)),
           DividerRow(
               left: 'Sugar', right: order.sugarLevel),
 

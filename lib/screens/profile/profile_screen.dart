@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/auth_provider.dart';
+import '../admin/admin_qr_screen.dart';
 import '../menu/menu_screen.dart';
 import '../local_socket/cashier_socket_screen.dart';
 import '../local_socket/kitchen_socket_screen.dart';
@@ -160,6 +161,19 @@ class ProfileScreen extends StatelessWidget {
                     },
                     icon: const Icon(Icons.wifi_tethering),
                     label: const Text('Open Cashier Hotspot Server'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminQrScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.qr_code),
+                    label: const Text('Manage Payment QR Code'),
                   ),
                 ],
               ),

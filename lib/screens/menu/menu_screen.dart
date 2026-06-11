@@ -183,42 +183,44 @@ class _MenuScreenState extends State<MenuScreen> {
                 ),
               ),
               Container(
-                height: 42,
                 color: AppColors.bgLight,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  itemCount: _categories.length,
-                  itemBuilder: (_, index) {
-                    final cat = _categories[index];
-                    final selected = cat == _categoryFilter;
-                    return GestureDetector(
-                      onTap: () => setState(() => _categoryFilter = cat),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color:
-                              selected ? AppColors.espresso : AppColors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
+                  child: Row(
+                    children: _categories.map((cat) {
+                      final selected = cat == _categoryFilter;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkWell(
+                          onTap: () => setState(() => _categoryFilter = cat),
+                          borderRadius: BorderRadius.circular(18),
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 36),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: selected ? AppColors.espresso : AppColors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                  color: selected
+                                      ? AppColors.espresso
+                                      : AppColors.borderColor,
+                                  width: 0.5),
+                            ),
+                            child: AppText(
+                              cat,
+                              size: 11,
+                              weight: selected ? FontWeight.w700 : FontWeight.normal,
                               color: selected
-                                  ? AppColors.espresso
-                                  : AppColors.borderColor,
-                              width: 0.5),
+                                  ? AppColors.goldLight
+                                  : AppColors.brown2,
+                            ),
+                          ),
                         ),
-                        child: AppText(cat,
-                            size: 11,
-                            weight:
-                                selected ? FontWeight.w700 : FontWeight.normal,
-                            color: selected
-                                ? AppColors.goldLight
-                                : AppColors.brown2),
-                      ),
-                    );
-                  },
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
               Expanded(

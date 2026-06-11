@@ -14,9 +14,6 @@ class AppConstants {
   static const String colInventory = 'inventory';
   static const String colKds = 'kds';
 
-  // VAT
-  static const double vatRate = 0.12;
-
   // Discount types
   static const String discNone = 'none';
   static const String discPercent = 'percent';

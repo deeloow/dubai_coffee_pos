@@ -6,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
@@ -213,6 +214,11 @@ class ReportsScreen extends StatelessWidget {
       return;
     }
 
+    // Request storage permission before opening the picker.
+    if (!await _ensureStoragePermission(context)) {
+      return;
+    }
+
     // Show directory picker
     final selectedDirectory = await FilePicker.getDirectoryPath(
       dialogTitle: 'Select folder to save PDF',
@@ -289,6 +295,7 @@ class ReportsScreen extends StatelessWidget {
     );
 
     try {
+      await outputFile.parent.create(recursive: true);
       await outputFile.writeAsBytes(await pdf.save());
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -308,6 +315,50 @@ class ReportsScreen extends StatelessWidget {
         );
       }
     }
+  }
+
+  Future<bool> _ensureStoragePermission(BuildContext context) async {
+    if (!Platform.isAndroid) return true;
+
+    final managedStatus = await Permission.manageExternalStorage.status;
+    final storageStatus = await Permission.storage.status;
+    if (managedStatus.isGranted || storageStatus.isGranted) {
+      return true;
+    }
+
+    var status = await Permission.manageExternalStorage.request();
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+    }
+
+    if (status.isGranted) {
+      return true;
+    }
+
+    if (status.isPermanentlyDenied) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Storage permission is permanently denied. Please enable it in settings.',
+            ),
+            backgroundColor: AppColors.red,
+          ),
+        );
+      }
+      await openAppSettings();
+      return false;
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Storage permission is required to save the PDF.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+    return false;
   }
 
   bool _isSameDate(DateTime a, DateTime b) {
@@ -514,30 +565,21 @@ class _HourlyBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Aggregate by hour (8am-7pm = indices 0-11)
-    final hourly = List.filled(12, 0.0);
+    final hourly = List.filled(24, 0.0);
     for (final o in orders) {
-      final h = o.createdAt.hour;
-      if (h >= 8 && h <= 19) {
-        hourly[h - 8] += o.total;
+      if (o.status == OrderStatus.paid) {
+        final h = o.createdAt.toLocal().hour;
+        hourly[h] += o.total;
       }
     }
 
     final maxY = hourly.reduce((a, b) => a > b ? a : b);
-    final labels = [
-      '8a',
-      '9',
-      '10',
-      '11',
-      '12',
-      '1p',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7'
-    ];
+    final labels = List.generate(24, (index) {
+      final hour = index % 12;
+      final suffix = index < 12 ? 'a' : 'p';
+      final displayHour = hour == 0 ? 12 : hour;
+      return '$displayHour$suffix';
+    });
 
     return SizedBox(
       height: 160,
@@ -574,7 +616,7 @@ class _HourlyBarChart extends StatelessWidget {
             ),
           ),
           barGroups: List.generate(
-            12,
+            24,
             (i) => BarChartGroupData(
               x: i,
               barRods: [

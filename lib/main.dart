@@ -5,6 +5,7 @@ import 'services/auth_service.dart';
 import 'services/auth_provider.dart';
 import 'services/inventory_service.dart';
 import 'services/local_order_socket_provider.dart';
+import 'services/order_service.dart';
 import 'services/pos_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
@@ -23,11 +24,13 @@ void main() async {
   await Hive.openBox('assignments');
   await Hive.openBox('recipes');
   await Hive.openBox('session');
+  await Hive.openBox('settings');
 
   await InventoryService().seedInventoryIfEmpty();
 
   // Run default admin setup in background (don't wait for it)
   AuthService().ensureDefaultAdmin();
+  OrderService.startDailyArchiveScheduler();
   runApp(const DubaiCoffeeApp());
 }
 
