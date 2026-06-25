@@ -38,7 +38,6 @@ class _CashierSocketScreenState extends State<CashierSocketScreen> {
       body: Consumer<LocalOrderSocketProvider>(
         builder: (context, provider, _) {
           final isServer = provider.isServer;
-          final status = provider.status;
           final connectedClients = provider.connectedPeers.length;
           final address = provider.localAddress;
           final port = provider.port;
@@ -58,7 +57,7 @@ class _CashierSocketScreenState extends State<CashierSocketScreen> {
                     const SizedBox(height: 8),
                     _StatusRow(label: 'Port', value: port.toString()),
                     const SizedBox(height: 8),
-                    _StatusRow(label: 'Status', value: status),
+                    _StatusRow(label: 'Status', value: provider.connectionState),
                     const SizedBox(height: 8),
                     _StatusRow(label: 'Connected kitchen clients', value: '$connectedClients'),
                     const SizedBox(height: 12),
@@ -73,22 +72,20 @@ class _CashierSocketScreenState extends State<CashierSocketScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              SectionCard(
+              const SectionCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: const [
+                  children: [
                     AppText('Automatic Order Sync', size: 15, weight: FontWeight.w700),
                     SizedBox(height: 12),
-                    AppText(
+                    Text(
                       'Orders from the cashier POS are sent automatically to the connected kitchen device when the hotspot server is active.',
-                      size: 12,
-                      color: AppColors.textMuted,
+                      style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                     SizedBox(height: 12),
-                    AppText(
+                    Text(
                       'Keep this screen open and connected; then confirm the order from the cashier section.',
-                      size: 12,
-                      color: AppColors.textMuted,
+                      style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ],
                 ),

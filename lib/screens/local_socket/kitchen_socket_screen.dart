@@ -41,7 +41,6 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
       backgroundColor: AppColors.cream,
       body: Consumer<LocalOrderSocketProvider>(
         builder: (context, provider, _) {
-          final status = provider.status;
           final peers = provider.connectedPeers;
           final lastOrder = provider.lastReceivedOrder;
 
@@ -86,7 +85,7 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    _StatusRow(label: 'Connection', value: status),
+                    _StatusRow(label: 'Connection', value: provider.connectionState),
                     const SizedBox(height: 8),
                     _StatusRow(label: 'Connected Host', value: provider.host),
                     const SizedBox(height: 8),

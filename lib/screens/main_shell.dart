@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
+import '../services/local_order_socket_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shared_widgets.dart';
 import 'pos/pos_screen.dart';
@@ -17,7 +18,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   List<_NavItem> _buildNavItems(bool isAdmin) {
@@ -61,6 +62,27 @@ class _MainShellState extends State<MainShell> {
       ),
     ];
     return items;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      final socketProvider = context.read<LocalOrderSocketProvider>();
+      socketProvider.resumeConnection();
+    }
   }
 
   @override

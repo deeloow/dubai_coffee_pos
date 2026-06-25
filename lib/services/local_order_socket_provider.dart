@@ -23,17 +23,51 @@ class LocalOrderSocketProvider extends ChangeNotifier {
   StreamSubscription<Order>? _receivedSubscription;
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<List<String>>? _peersSubscription;
+  StreamSubscription<DateTime>? _reportResetSubscription;
+  DateTime? _pendingReportResetAt;
 
   bool get isServer => _isServer;
   bool get isConnected => _connectedPeers.isNotEmpty;
   String get status => _status;
+  String get connectionState {
+    switch (_status) {
+      case 'connecting':
+        return 'Connecting';
+      case 'connected':
+        return 'Connected';
+      case 'reconnecting':
+        return 'Reconnecting';
+      case 'listening':
+        return 'Listening';
+      case 'idle':
+        return 'Disconnected';
+      case 'error':
+        return 'Connection error';
+      case 'received':
+        return 'Connected';
+      case 'syncing':
+        return 'Syncing';
+      default:
+        return _status;
+    }
+  }
   String? get error => _error;
   String get host => _host;
   int get port => _port;
+  bool get shouldAutoReconnect => _socketService.autoReconnect;
   String get localAddress => _localAddress;
   List<String> get connectedPeers => List.unmodifiable(_connectedPeers);
   List<Order> get receivedOrders => List.unmodifiable(_receivedOrders);
   Order? get lastReceivedOrder => _lastReceivedOrder;
+  DateTime? get pendingReportResetAt => _pendingReportResetAt;
+  bool get hasPendingReportReset => _pendingReportResetAt != null;
+
+  void acknowledgeReportReset() {
+    if (_pendingReportResetAt != null) {
+      _pendingReportResetAt = null;
+      notifyListeners();
+    }
+  }
 
   void init() {
     if (_initialized) return;
@@ -41,11 +75,12 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     _receivedSubscription = _socketService.receivedOrders.listen(
       (order) async {
         _lastReceivedOrder = order;
+        _receivedOrders.removeWhere((existing) => existing.id == order.id);
         _receivedOrders.insert(0, order);
         _status = 'received';
         _error = null;
         notifyListeners();
-        await _saveReceivedOrder(order);
+        await _saveReceivedOrder(order, deductInventory: false);
       },
       onError: (error) {
         _error = error.toString();
@@ -80,6 +115,20 @@ class LocalOrderSocketProvider extends ChangeNotifier {
         notifyListeners();
       },
     );
+
+    _reportResetSubscription = _socketService.receivedReportResets.listen(
+      (resetAt) {
+        _pendingReportResetAt = resetAt;
+        _status = 'report_reset_received';
+        _error = null;
+        notifyListeners();
+      },
+      onError: (error) {
+        _error = error.toString();
+        _status = 'error';
+        notifyListeners();
+      },
+    );
   }
 
   Future<bool> startServer({int port = 4567}) async {
@@ -88,7 +137,6 @@ class LocalOrderSocketProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
       await _socketService.startServer(port: port);
-      // mark server mode only after successful start
       _isServer = true;
       _localAddress = _socketService.localAddress;
       _port = _socketService.port;
@@ -99,7 +147,6 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     } catch (error) {
       _error = error.toString();
       _status = 'error';
-      // ensure we are not marked as server on failure
       _isServer = false;
       notifyListeners();
       return false;
@@ -124,6 +171,27 @@ class LocalOrderSocketProvider extends ChangeNotifier {
       _status = 'error';
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<void> resumeConnection() async {
+    if (_isServer || !_socketService.autoReconnect || _host.isEmpty) {
+      return;
+    }
+    if (_socketService.isConnected) {
+      return;
+    }
+    try {
+      _status = 'reconnecting';
+      _error = null;
+      notifyListeners();
+      await _socketService.connectToHost(_host, port: _port);
+      _status = 'connected';
+      _error = null;
+      notifyListeners();
+    } catch (_) {
+      _status = 'reconnecting';
+      notifyListeners();
     }
   }
 
@@ -154,6 +222,33 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> sendReportReset(DateTime resetAt) async {
+    if (!_socketService.isConnected) {
+      _error = 'No active connection';
+      _status = 'offline';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      _status = 'syncing';
+      _error = null;
+      notifyListeners();
+      final ok = await _socketService.sendReportReset(resetAt);
+      _status = ok ? 'connected' : 'error';
+      if (!ok) {
+        _error = 'Failed to send report reset';
+      }
+      notifyListeners();
+      return ok;
+    } catch (error) {
+      _error = error.toString();
+      _status = 'error';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> disconnect() async {
     await _socketService.disconnect();
     _status = 'idle';
@@ -173,12 +268,12 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _saveReceivedOrder(Order order) async {
+  Future<void> _saveReceivedOrder(Order order, {bool deductInventory = false}) async {
     try {
       final id = order.id.isNotEmpty ? order.id : _uuid.v4();
       final orderToSave = order.copyWith(id: id);
       final orderService = OrderService();
-      await orderService.saveOrder(orderToSave);
+      await orderService.saveOrder(orderToSave, deductInventory: deductInventory);
     } catch (error) {
       // Ignore persistence failures for received orders.
     }
@@ -189,6 +284,7 @@ class LocalOrderSocketProvider extends ChangeNotifier {
     _receivedSubscription?.cancel();
     _statusSubscription?.cancel();
     _peersSubscription?.cancel();
+    _reportResetSubscription?.cancel();
     _socketService.dispose();
     super.dispose();
   }

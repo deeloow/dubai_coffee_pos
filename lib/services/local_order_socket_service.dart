@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../models/models.dart';
+import 'order_service.dart';
+import 'report_service.dart';
 
 class LocalOrderSocketService {
   final int defaultPort;
@@ -10,25 +13,30 @@ class LocalOrderSocketService {
   final List<Socket> _connectedClients = [];
   final Map<Socket, String> _receiveBuffers = {};
   final StreamController<Order> _receivedOrdersController = StreamController.broadcast();
+  final StreamController<DateTime> _receivedReportResetController = StreamController.broadcast();
   final StreamController<String> _statusController = StreamController.broadcast();
   final StreamController<List<String>> _peersController = StreamController.broadcast();
   final Duration _reconnectDelay = const Duration(seconds: 5);
+  final Duration _heartbeatInterval = const Duration(seconds: 12);
 
   bool _autoReconnect = false;
   bool _disposed = false;
   String _host = '0.0.0.0';
   int _port = 4567;
   Timer? _reconnectTimer;
+  Timer? _heartbeatTimer;
 
   LocalOrderSocketService({this.defaultPort = 4567}) {
     _port = defaultPort;
   }
 
   Stream<Order> get receivedOrders => _receivedOrdersController.stream;
+  Stream<DateTime> get receivedReportResets => _receivedReportResetController.stream;
   Stream<String> get statusStream => _statusController.stream;
   Stream<List<String>> get connectedPeers => _peersController.stream;
   String get localAddress => _host;
   int get port => _port;
+  bool get autoReconnect => _autoReconnect;
   bool get isServerMode => _serverSocket != null;
   bool get isClientMode => _clientSocket != null;
   bool get isConnected =>
@@ -54,9 +62,11 @@ class LocalOrderSocketService {
         _scheduleReconnectIfNeeded();
       },
     );
+    _startHeartbeat();
   }
 
   Future<void> stopServer() async {
+    _stopHeartbeat();
     _autoReconnect = false;
     for (final socket in List<Socket>.from(_connectedClients)) {
       try {
@@ -87,6 +97,7 @@ class LocalOrderSocketService {
       _setStatus('connected');
       _updatePeers();
       _receiveBuffers[socket] = '';
+      _startHeartbeat();
       socket.listen(
         (data) => _handleSocketData(socket, data),
         onDone: () {
@@ -112,6 +123,7 @@ class LocalOrderSocketService {
 
   Future<void> disconnect() async {
     _autoReconnect = false;
+    _stopHeartbeat();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     try {
@@ -131,9 +143,21 @@ class LocalOrderSocketService {
     return sendJson(payload);
   }
 
-  Future<bool> sendJson(Map<String, dynamic> jsonMap) async {
+  Future<bool> sendJson(Map<String, dynamic> jsonMap, {Socket? target}) async {
+    final message = '${jsonEncode(jsonMap)}\n';
+
+    if (target != null) {
+      try {
+        target.write(message);
+        await target.flush();
+        return true;
+      } catch (error) {
+        _removeClient(target);
+        return false;
+      }
+    }
+
     if (isServerMode && _connectedClients.isNotEmpty) {
-      final message = '${jsonEncode(jsonMap)}\n';
       for (final socket in List<Socket>.from(_connectedClients)) {
         try {
           socket.write(message);
@@ -147,7 +171,7 @@ class LocalOrderSocketService {
 
     if (isClientMode && _clientSocket != null) {
       try {
-        _clientSocket!.write('${jsonEncode(jsonMap)}\n');
+        _clientSocket!.write(message);
         await _clientSocket!.flush();
         return true;
       } catch (error) {
@@ -160,11 +184,50 @@ class LocalOrderSocketService {
     return false;
   }
 
+  Future<bool> sendReportReset(DateTime resetAt) async {
+    return sendJson(
+      {
+        'type': 'report_reset',
+        'payload': {'resetAt': resetAt.toIso8601String()},
+      },
+    );
+  }
+
+  Future<bool> _sendReportState(Socket socket) async {
+    final lastResetAt = ReportService().lastResetAt();
+    if (lastResetAt == null) {
+      return false;
+    }
+
+    return sendJson(
+      {
+        'type': 'report_state',
+        'payload': {'resetAt': lastResetAt},
+      },
+      target: socket,
+    );
+  }
+
+  Future<void> _sendAllOrders(Socket socket) async {
+    final orders = await OrderService().fetchOrders(includeArchived: false);
+    for (final order in orders) {
+      await sendJson(
+        {
+          'type': 'order_sync',
+          'payload': order.toMap(),
+        },
+        target: socket,
+      );
+    }
+  }
+
   void _handleNewClient(Socket socket) {
     _connectedClients.add(socket);
     _receiveBuffers[socket] = '';
     _setStatus('connected');
     _updatePeers();
+    _sendReportState(socket);
+    _sendAllOrders(socket);
     socket.listen(
       (data) => _handleSocketData(socket, data),
       onDone: () {
@@ -189,23 +252,103 @@ class LocalOrderSocketService {
       if (rawMessage.isEmpty) {
         continue;
       }
-      _handleIncomingMessage(rawMessage);
+      _handleIncomingMessage(rawMessage, sourceSocket: socket);
     }
 
     _receiveBuffers[socket] = remainder;
   }
 
-  void _handleIncomingMessage(String rawMessage) {
+  void _handleIncomingMessage(String rawMessage, {Socket? sourceSocket}) {
     try {
       final decoded = jsonDecode(rawMessage);
       if (decoded is Map<String, dynamic>) {
+        final type = decoded['type']?.toString();
         final payload = _extractPayload(decoded);
-        final order = _orderFromPayload(payload);
-        _receivedOrdersController.add(order);
+
+        if (type == 'report_reset') {
+          _handleReportReset(payload);
+          if (isServerMode && sourceSocket != null) {
+            for (final client in List<Socket>.from(_connectedClients)) {
+              if (client != sourceSocket) {
+                sendJson(
+                  {
+                    'type': 'report_reset',
+                    'payload': payload,
+                  },
+                  target: client,
+                );
+              }
+            }
+          }
+          return;
+        }
+
+        if (type == 'report_state') {
+          _handleReportState(payload);
+          return;
+        }
+
+        if (type == 'ping') {
+          if (isServerMode && sourceSocket != null) {
+            sendJson({'type': 'pong'}, target: sourceSocket);
+          } else if (isClientMode) {
+            sendJson({'type': 'pong'});
+          }
+          return;
+        }
+
+        if (type == 'pong') {
+          _setStatus('connected');
+          return;
+        }
+
+        if (type == 'order' || type == 'order_sync') {
+          final order = _orderFromPayload(payload);
+          _receivedOrdersController.add(order);
+
+          if (isServerMode && sourceSocket != null && type == 'order') {
+            for (final client in List<Socket>.from(_connectedClients)) {
+              if (client != sourceSocket) {
+                sendJson(
+                  {
+                    'type': 'order',
+                    'payload': order.toMap(),
+                  },
+                  target: client,
+                );
+              }
+            }
+          }
+        }
       }
     } catch (_) {
       // Ignore malformed payloads.
     }
+  }
+
+  void _handleReportReset(Map<String, dynamic> payload) {
+    final rawResetAt = payload['resetAt']?.toString();
+    final resetAt = rawResetAt != null ? DateTime.tryParse(rawResetAt) : null;
+    if (resetAt == null) {
+      return;
+    }
+
+    ReportService().applyRemoteReset(resetAt);
+    if (!_receivedReportResetController.isClosed) {
+      _receivedReportResetController.add(resetAt);
+    }
+    debugPrint('Received report reset event for $resetAt');
+  }
+
+  void _handleReportState(Map<String, dynamic> payload) {
+    final rawResetAt = payload['resetAt']?.toString();
+    final resetAt = rawResetAt != null ? DateTime.tryParse(rawResetAt) : null;
+    if (resetAt == null) {
+      return;
+    }
+
+    ReportService().applyRemoteState(resetAt);
+    debugPrint('Received report state sync for $resetAt');
   }
 
   Map<String, dynamic> _extractPayload(Map<String, dynamic> decoded) {
@@ -246,6 +389,16 @@ class LocalOrderSocketService {
             DateTime.now().millisecondsSinceEpoch.remainder(1000000);
     final total = items.fold<double>(0, (sum, item) => sum + item.subtotal);
 
+    DateTime createdAtValue;
+    final createdAtRaw = payload['createdAt'];
+    if (createdAtRaw is DateTime) {
+      createdAtValue = createdAtRaw;
+    } else if (createdAtRaw is String) {
+      createdAtValue = DateTime.tryParse(createdAtRaw) ?? DateTime.now();
+    } else {
+      createdAtValue = DateTime.now();
+    }
+
     return Order(
       id: payload['id']?.toString() ?? '',
       orderNumber: orderNumber,
@@ -259,7 +412,7 @@ class LocalOrderSocketService {
       tendered: total,
       change: 0,
       paymentMethod: PaymentMethod.cash,
-      createdAt: DateTime.now(),
+      createdAt: createdAtValue,
       status: _parseOrderStatus(payload['status']),
     );
   }
@@ -279,7 +432,16 @@ class LocalOrderSocketService {
     if (value.contains('hold')) {
       return OrderStatus.held;
     }
-    if (value.contains('pending')) {
+    if (value.contains('checked')) {
+      return OrderStatus.checked;
+    }
+    if (value.contains('ready')) {
+      return OrderStatus.ready;
+    }
+    if (value.contains('complete')) {
+      return OrderStatus.completed;
+    }
+    if (value.contains('paid') || value.contains('pending')) {
       return OrderStatus.paid;
     }
     return OrderStatus.paid;
@@ -302,6 +464,7 @@ class LocalOrderSocketService {
       return;
     }
 
+    _setStatus('reconnecting');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(_reconnectDelay, () {
       if (!_autoReconnect || _disposed) {
@@ -309,6 +472,33 @@ class LocalOrderSocketService {
       }
       connectToHost(_host, port: _port);
     });
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    if (_disposed) {
+      return;
+    }
+
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      if (_disposed) {
+        _stopHeartbeat();
+        return;
+      }
+
+      if (isClientMode && _clientSocket != null) {
+        sendJson({'type': 'ping'});
+      } else if (isServerMode && _connectedClients.isNotEmpty) {
+        for (final client in List<Socket>.from(_connectedClients)) {
+          sendJson({'type': 'ping'}, target: client);
+        }
+      }
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   Future<String> _fetchLocalIpAddress() async {
@@ -396,6 +586,7 @@ class LocalOrderSocketService {
     await stopServer();
     await disconnect();
     await _receivedOrdersController.close();
+    await _receivedReportResetController.close();
     await _statusController.close();
     await _peersController.close();
   }
