@@ -45,17 +45,44 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> register(
       String email, String password, String name, UserRole role) async {
+    if (kDebugMode) print('🔍 [AuthProvider.register] Starting registration: name=$name, email=$email, role=$role');
     _loading = true;
     _error = null;
     notifyListeners();
+
     try {
-      _user = await _authService.register(email, password, name, role);
+      _user = null;
+      final trimmedName = name.trim();
+      final trimmedEmail = email.trim();
+      if (kDebugMode) print('📝 [AuthProvider.register] Trimmed data: name=$trimmedName, email=$trimmedEmail');
+
+      if (trimmedName.isEmpty) {
+        throw Exception('name-required');
+      }
+      if (!RegExp(
+              r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+          .hasMatch(trimmedEmail)) {
+        throw Exception('invalid-email');
+      }
+      if (password.isEmpty || password.length < 6) {
+        throw Exception('weak-password');
+      }
+
+      if (kDebugMode) print('🔄 [AuthProvider.register] Calling _authService.register()...');
+      final createdUser = await _authService.register(trimmedEmail, password, trimmedName, role);
+      if (kDebugMode) print('✅ [AuthProvider.register] Created user: ${createdUser?.id}, isNull=${createdUser == null}');
+      if (createdUser != null) {
+        _user = createdUser;
+      }
       _loading = false;
       notifyListeners();
-      return _user != null;
+      final success = createdUser != null;
+      if (kDebugMode) print('🏁 [AuthProvider.register] Returning: $success');
+      return success;
     } catch (e) {
       _loading = false;
       _error = _parseError(e.toString());
+      if (kDebugMode) print('❌ [AuthProvider.register] Error: $e, parsed as: $_error');
       notifyListeners();
       return false;
     }
@@ -74,15 +101,33 @@ class AuthProvider extends ChangeNotifier {
 
   String _parseError(String raw) {
     if (kDebugMode) {
-      print('🔴 Auth Error: $raw');
+      debugPrint('🔴 Auth Error: $raw');
     }
-    if (raw.contains('user-not-found')) return 'No account found with this email. Try: admin@dubai.coffee';
-    if (raw.contains('wrong-password')) return 'Incorrect password. Try: admin123';
-    if (raw.contains('email-already-in-use')) return 'Email already registered.';
-    if (raw.contains('weak-password')) return 'Password must be at least 6 characters.';
-    if (raw.contains('invalid-email')) return 'Invalid email address.';
-    if (raw.contains('network-request-failed')) return 'Network error. Check your connection.';
-    if (raw.contains('PERMISSION_DENIED')) return 'Firestore permission error. Check your Firebase rules.';
-    return 'Authentication failed: $raw';
+    final normalized = raw.toLowerCase();
+
+    if (normalized.contains('name-required')) return 'Name is required.';
+    if (normalized.contains('user-not-found')) return 'No account found with this email. Try: admin@dubai.coffee';
+    if (normalized.contains('wrong-password')) return 'Incorrect password. Try: admin123';
+    if (normalized.contains('email-already-in-use') || normalized.contains('email already registered')) {
+      return 'This email is already registered. Please use another email or sign in.';
+    }
+    if (normalized.contains('weak-password')) return 'Please use a stronger password.';
+    if (normalized.contains('invalid-email')) return 'Please enter a valid email address.';
+    if (normalized.contains('passwords do not match') || normalized.contains('password mismatch')) {
+      return 'Passwords do not match.';
+    }
+    if (normalized.contains('account-not-saved')) {
+      return 'We couldn\'t finish creating your account. Please try again.';
+    }
+    if (normalized.contains('network-request-failed') || normalized.contains('socketexception') || normalized.contains('failed host lookup')) {
+      return 'Unable to create your account. Please check your internet connection and try again.';
+    }
+    if (normalized.contains('permission_denied') || normalized.contains('permission denied')) {
+      return 'Unable to create your account right now. Please try again later.';
+    }
+    if (normalized.contains('null') || normalized.contains('formatexception')) {
+      return 'Unable to create your account right now. Please try again later.';
+    }
+    return 'We couldn\'t create your account. Please try again.';
   }
 }

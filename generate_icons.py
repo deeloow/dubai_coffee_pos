@@ -59,6 +59,26 @@ ICON_SIZES = {
     }
 }
 
+def crop_whitespace(image: Image.Image) -> Image.Image:
+    """Crop transparent or white whitespace from around the source image."""
+    if image.mode != 'RGBA':
+        image = image.convert('RGBA')
+
+    pixels = image.getdata()
+    width, height = image.size
+    mask = [
+        not (a == 0 or (r > 240 and g > 240 and b > 240))
+        for r, g, b, a in pixels
+    ]
+    coords = [(x, y) for y in range(height) for x in range(width) if mask[y * width + x]]
+    if not coords:
+        return image
+
+    xs, ys = zip(*coords)
+    bbox = (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
+    return image.crop(bbox)
+
+
 def generate_icons(source_image_path):
     """Generate icons from source image for all platforms."""
     
@@ -74,24 +94,64 @@ def generate_icons(source_image_path):
         print(f"Error loading image: {e}")
         sys.exit(1)
     
+    img = crop_whitespace(img)
+    if img.size[0] != img.size[1]:
+        max_side = max(img.size)
+        square = Image.new('RGBA', (max_side, max_side), (0, 0, 0, 0))
+        offset = ((max_side - img.size[0]) // 2, (max_side - img.size[1]) // 2)
+        square.paste(img, offset, img)
+        img = square
+    
     # Generate Android icons
     print("\nGenerating Android icons...")
     android_res_path = PROJECT_ROOT / "android" / "app" / "src" / "main" / "res"
-    for dir_name, size in ICON_SIZES["android"].items():
-        output_dir = android_res_path / dir_name
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        icon_img = img.copy()
+
+    def save_icon(image, output_path):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(output_path, "PNG")
+        print(f"  ✓ {output_path}")
+
+    def make_square_icon(source, size):
+        icon_img = source.copy()
         icon_img.thumbnail((size, size), Image.Resampling.LANCZOS)
-        # Create a new image with the desired size (square)
         new_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         offset = ((size - icon_img.size[0]) // 2, (size - icon_img.size[1]) // 2)
         new_img.paste(icon_img, offset, icon_img if icon_img.mode == "RGBA" else None)
-        
+        return new_img
+
+    for dir_name, size in ICON_SIZES["android"].items():
+        output_dir = android_res_path / dir_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         output_path = output_dir / "ic_launcher.png"
-        new_img.save(output_path, "PNG")
-        print(f"  ✓ {output_path}")
-    
+        save_icon(make_square_icon(img, size), output_path)
+
+        output_round_path = output_dir / "ic_launcher_round.png"
+        save_icon(make_square_icon(img, size), output_round_path)
+
+    # Generate adaptive icon files for Android 8.0+
+    adaptive_dir = android_res_path / "mipmap-anydpi-v26"
+    adaptive_dir.mkdir(parents=True, exist_ok=True)
+
+    adaptive_foreground = make_square_icon(img, 432)
+    save_icon(adaptive_foreground, adaptive_dir / "ic_launcher_foreground.png")
+
+    adaptive_icon_xml = """<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"""
+    adaptive_icon_xml += "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
+    adaptive_icon_xml += "    <background android:drawable=\"@android:color/transparent\" />\n"
+    adaptive_icon_xml += "    <foreground android:drawable=\"@mipmap/ic_launcher_foreground\" />\n"
+    adaptive_icon_xml += "</adaptive-icon>\n"
+
+    round_adaptive_icon_xml = adaptive_icon_xml
+
+    with open(adaptive_dir / "ic_launcher.xml", "w", encoding="utf-8") as f:
+        f.write(adaptive_icon_xml)
+    print(f"  ✓ {adaptive_dir / 'ic_launcher.xml'}")
+
+    with open(adaptive_dir / "ic_launcher_round.xml", "w", encoding="utf-8") as f:
+        f.write(round_adaptive_icon_xml)
+    print(f"  ✓ {adaptive_dir / 'ic_launcher_round.xml'}")
+
     # Generate iOS icons
     print("\nGenerating iOS icons...")
     ios_icons_path = PROJECT_ROOT / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"

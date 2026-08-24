@@ -34,6 +34,8 @@ class _ReceiptListSheetState extends State<ReceiptListSheet> {
     showModalBottomSheet(
       context: widget.parentContext,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => ReceiptSheet(order: order),
     );
@@ -83,6 +85,16 @@ class _ReceiptListSheetState extends State<ReceiptListSheet> {
                 ),
                 const SizedBox(height: 2),
                 AppText(
+                  order.items
+                      .map((item) => '${item.qty}× ${item.name} (${item.cupSize})')
+                      .join(', '),
+                  size: 11,
+                  color: AppColors.textMuted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                AppText(
                   DateFormat('MMM d • h:mm a').format(order.createdAt),
                   size: 11,
                   color: AppColors.textMuted,
@@ -98,7 +110,7 @@ class _ReceiptListSheetState extends State<ReceiptListSheet> {
               const SizedBox(height: 6),
               StatusBadge(
                 label: order.statusLabel,
-                isPaid: order.status == OrderStatus.paid,
+                isPaid: order.status == OrderStatus.paid || order.status == OrderStatus.completed,
               ),
             ],
           ),
@@ -163,7 +175,8 @@ class _ReceiptListSheetState extends State<ReceiptListSheet> {
           Expanded(
             child: StreamBuilder<List<Order>>(
               stream: _orderSvc.ordersStream(
-                  limit: _showAllReceipts ? null : _receiptLimit),
+                  limit: _showAllReceipts ? null : _receiptLimit,
+                  includeArchived: false),
               initialData: const [],
               builder: (ctx, snap) {
                 if (snap.hasError) {

@@ -4,9 +4,13 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 
 class AuthService {
-  final Box _users = Hive.box('users');
-  final Box _session = Hive.box('session');
+  final Future<Box> _usersBoxFuture;
+  final Future<Box> _sessionBoxFuture;
   final Uuid _uuid = const Uuid();
+
+  AuthService()
+      : _usersBoxFuture = Hive.openBox('users'),
+        _sessionBoxFuture = Hive.openBox('session');
 
   String loginMode = 'offline';
 
@@ -28,24 +32,47 @@ class AuthService {
 
   Future<AppUser?> register(
       String email, String password, String name, UserRole role) async {
+    if (kDebugMode) print('🔍 [AuthService.register] Starting registration for: $email');
+    final usersBox = await _usersBoxFuture;
     try {
-      final exists = _users.values
+      final trimmedEmail = email.trim();
+      final trimmedName = name.trim();
+      final emailPattern = RegExp(
+        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+      );
+
+      if (trimmedName.isEmpty) {
+        throw Exception('name-required');
+      }
+      if (trimmedEmail.isEmpty || !emailPattern.hasMatch(trimmedEmail)) {
+        throw Exception('invalid-email');
+      }
+      if (password.isEmpty || password.length < 6) {
+        throw Exception('weak-password');
+      }
+
+      final normalizedEmail = trimmedEmail.toLowerCase();
+      if (kDebugMode) print('📍 [AuthService.register] Checking for duplicate email: $normalizedEmail');
+      final exists = usersBox.values
           .map((item) => _toMap(item))
-          .any((item) => item['email'] == email);
+          .any((item) => (item['email'] ?? '').toString().trim().toLowerCase() == normalizedEmail);
       if (exists) {
+        if (kDebugMode) print('❌ [AuthService.register] Email already registered: $normalizedEmail');
         throw Exception('email-already-in-use');
       }
 
-      return await _localRegister(email, password, name, role);
+      if (kDebugMode) print('✅ [AuthService.register] Email is unique, proceeding with registration');
+      return await _localRegister(normalizedEmail, password, trimmedName, role);
     } catch (e) {
-      if (kDebugMode) print('Register error: $e');
+      if (kDebugMode) print('❌ [AuthService.register] Error: $e');
       rethrow;
     }
   }
 
   Future<AppUser?> _fetchUser(String uid) async {
+    final usersBox = await _usersBoxFuture;
     try {
-      final data = _users.get(uid);
+      final data = usersBox.get(uid);
       if (data == null) return null;
       final map = _toMap(data);
       return AppUser.fromMap(map);
@@ -56,10 +83,11 @@ class AuthService {
   }
 
   Future<List<AppUser>> getUsersByRole(UserRole role) async {
+    final usersBox = await _usersBoxFuture;
     try {
       // Return only local users filtered by role.
       final users = <AppUser>[];
-      for (final item in _users.values) {
+      for (final item in usersBox.values) {
         final map = _toMap(item);
         try {
           final user = AppUser.fromMap(map);
@@ -79,8 +107,9 @@ class AuthService {
   }
 
   Future<AppUser?> getCurrentUserProfile() async {
+    final sessionBox = await _sessionBoxFuture;
     try {
-      final userId = _session.get('currentUserId') as String?;
+      final userId = sessionBox.get('currentUserId') as String?;
       if (userId == null) return null;
       return await _fetchUser(userId);
     } catch (e) {
@@ -90,8 +119,9 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    final sessionBox = await _sessionBoxFuture;
     try {
-      await _session.delete('currentUserId');
+      await sessionBox.delete('currentUserId');
     } catch (e) {
       if (kDebugMode) print('SignOut error: $e');
       rethrow;
@@ -99,8 +129,9 @@ class AuthService {
   }
 
   Future<void> ensureDefaultAdmin() async {
+    final usersBox = await _usersBoxFuture;
     try {
-      final adminExists = _users.values
+      final adminExists = usersBox.values
           .map((item) => _toMap(item))
           .any((item) => item['role'] == 'admin');
 
@@ -121,27 +152,43 @@ class AuthService {
   }
 
   Future<void> _storeLocalUser(AppUser user, String password) async {
+    final usersBox = await _usersBoxFuture;
     try {
       final userMap = user.toMap();
       if (password.isNotEmpty) {
         userMap['password'] = password;
       }
-      await _users.put(user.id, userMap);
+      await usersBox.put(user.id, userMap);
     } catch (e) {
       if (kDebugMode) print('StoreLocalUser error: $e');
       rethrow;
     }
   }
 
+  Future<void> _storeSession(String userId) async {
+    final sessionBox = await _sessionBoxFuture;
+    try {
+      await sessionBox.put('currentUserId', userId);
+    } catch (e) {
+      if (kDebugMode) print('StoreSession error: $e');
+      rethrow;
+    }
+  }
+
   Future<AppUser?> _localSignIn(String email, String password) async {
+    final usersBox = await _usersBoxFuture;
+    final sessionBox = await _sessionBoxFuture;
     try {
       AppUser? matchedUser;
       String? matchedPassword;
 
-      for (int i = 0; i < _users.length; i++) {
+      final normalizedEmail = email.trim().toLowerCase();
+
+      for (int i = 0; i < usersBox.length; i++) {
         try {
-          final map = _toMap(_users.getAt(i));
-          if (map['email'] == email) {
+          final map = _toMap(usersBox.getAt(i));
+          final storedEmail = (map['email'] ?? '').toString().trim().toLowerCase();
+          if (storedEmail == normalizedEmail) {
             final storedPassword = map['password'] as String?;
             if (storedPassword == password) {
               matchedUser = AppUser.fromMap(map);
@@ -159,7 +206,7 @@ class AuthService {
         throw Exception('user-not-found');
       }
 
-      await _session.put('currentUserId', matchedUser.id);
+      await sessionBox.put('currentUserId', matchedUser.id);
       return matchedUser;
     } catch (e) {
       if (kDebugMode) print('LocalSignIn error: $e');
@@ -169,14 +216,28 @@ class AuthService {
 
   Future<AppUser?> _localRegister(
       String email, String password, String name, UserRole role) async {
+    if (kDebugMode) print('🔄 [AuthService._localRegister] Creating new user: $email');
     try {
       final id = _uuid.v4();
+      if (kDebugMode) print('🏗️ [AuthService._localRegister] Generated user ID: $id');
       final user = AppUser(id: id, name: name, email: email, role: role);
       await _storeLocalUser(user, password);
-      await _session.put('currentUserId', id);
+      await _storeSession(user.id);
+
+      final usersBox = await _usersBoxFuture;
+      final saved = usersBox.get(user.id);
+      final savedMap = _toMap(saved);
+      final savedEmail = (savedMap['email'] ?? '').toString().trim().toLowerCase();
+      final savedName = (savedMap['name'] ?? '').toString().trim();
+
+      if (saved == null || savedEmail != email.toLowerCase() || savedName != name.trim()) {
+        throw Exception('account-not-saved');
+      }
+
+      if (kDebugMode) print('✅ [AuthService._localRegister] User stored successfully and confirmed in Hive');
       return user;
     } catch (e) {
-      if (kDebugMode) print('LocalRegister error: $e');
+      if (kDebugMode) print('❌ [AuthService._localRegister] Error: $e');
       rethrow;
     }
   }

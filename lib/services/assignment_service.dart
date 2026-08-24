@@ -5,18 +5,21 @@ import 'remote_assignment_service.dart';
 
 class AssignmentService {
   final RemoteAssignmentService _remoteService = RemoteAssignmentService();
-  final Box _assignments = Hive.box('assignments');
+  final Future<Box> _assignmentsBoxFuture;
   final Uuid _uuid = const Uuid();
 
+  AssignmentService() : _assignmentsBoxFuture = Hive.openBox('assignments');
+
   Stream<List<Assignment>> assignmentsStream() async* {
-    yield _assignments.values
+    final assignmentsBox = await _assignmentsBoxFuture;
+    yield assignmentsBox.values
         .cast<Map>()
         .map((item) => Assignment.fromMap(Map<String, dynamic>.from(item)))
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    await for (final _ in _assignments.watch()) {
-      yield _assignments.values
+    await for (final _ in assignmentsBox.watch()) {
+      yield assignmentsBox.values
           .cast<Map>()
           .map((item) => Assignment.fromMap(Map<String, dynamic>.from(item)))
           .toList()
@@ -31,6 +34,7 @@ class AssignmentService {
     required String shift,
     String type = 'manual',
   }) async {
+    final assignmentsBox = await _assignmentsBoxFuture;
     final id = _uuid.v4();
     final assignment = Assignment(
       id: id,
@@ -43,13 +47,14 @@ class AssignmentService {
       createdAt: DateTime.now(),
       synced: false,
     );
-    await _assignments.put(id, assignment.toMap());
+    await assignmentsBox.put(id, assignment.toMap());
     await syncAssignmentRemotely(assignment);
   }
 
   Future<void> recordLoginAssignment(AppUser barista) async {
+    final assignmentsBox = await _assignmentsBoxFuture;
     final today = DateTime.now();
-    final alreadyRecorded = _assignments.values.cast<Map>().map(
+    final alreadyRecorded = assignmentsBox.values.cast<Map>().map(
           (item) => Assignment.fromMap(Map<String, dynamic>.from(item)),
         ).any((assignment) =>
             assignment.baristaId == barista.id &&
@@ -72,13 +77,14 @@ class AssignmentService {
       synced: false,
     );
 
-    await _assignments.put(newAssignment.id, newAssignment.toMap());
+    await assignmentsBox.put(newAssignment.id, newAssignment.toMap());
     await syncAssignmentRemotely(newAssignment);
   }
 
   Future<Assignment?> getTodayLoginAssignmentForUser(String baristaId) async {
+    final assignmentsBox = await _assignmentsBoxFuture;
     final today = DateTime.now();
-    for (final item in _assignments.values.cast<Map>()) {
+    for (final item in assignmentsBox.values.cast<Map>()) {
       final assignment = Assignment.fromMap(Map<String, dynamic>.from(item));
       if (assignment.baristaId == baristaId &&
           assignment.type == 'login' &&
@@ -92,7 +98,8 @@ class AssignmentService {
   }
 
   Future<List<Assignment>> getAssignmentsForDate(DateTime date) async {
-    return _assignments.values
+    final assignmentsBox = await _assignmentsBoxFuture;
+    return assignmentsBox.values
         .cast<Map>()
         .map((item) => Assignment.fromMap(Map<String, dynamic>.from(item)))
         .where((assignment) => assignment.date.year == date.year && assignment.date.month == date.month && assignment.date.day == date.day)
@@ -100,9 +107,10 @@ class AssignmentService {
   }
 
   Future<void> syncAssignmentRemotely(Assignment assignment) async {
+    final assignmentsBox = await _assignmentsBoxFuture;
     try {
       await _remoteService.upsertAssignment(assignment);
-      await _assignments.put(
+      await assignmentsBox.put(
         assignment.id,
         assignment.copyWith(synced: true).toMap(),
       );
@@ -112,10 +120,11 @@ class AssignmentService {
   }
 
   Future<int> mergeRemoteAssignments(List<Assignment> remoteAssignments) async {
+    final assignmentsBox = await _assignmentsBoxFuture;
     var count = 0;
     for (final assignment in remoteAssignments) {
-      final exists = _assignments.containsKey(assignment.id);
-      await _assignments.put(assignment.id, assignment.copyWith(synced: true).toMap());
+      final exists = assignmentsBox.containsKey(assignment.id);
+      await assignmentsBox.put(assignment.id, assignment.copyWith(synced: true).toMap());
       if (!exists) count++;
     }
     return count;

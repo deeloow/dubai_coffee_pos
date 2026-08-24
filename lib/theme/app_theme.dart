@@ -18,6 +18,7 @@ class AppColors {
   static const Color textMuted = Color(0xFFA9937A);
   static const Color textBrown = Color(0xFF7A6A52);
   static const Color bgLight = Color(0xFFF7F2E8);
+  static const Color black = Color(0xFF000000);
 }
 
 class AppTheme {
@@ -29,7 +30,6 @@ class AppTheme {
         primary: AppColors.gold,
         secondary: AppColors.espresso,
         surface: AppColors.white,
-        background: AppColors.cream,
       ),
       scaffoldBackgroundColor: AppColors.cream,
       textTheme: GoogleFonts.dmSansTextTheme().copyWith(

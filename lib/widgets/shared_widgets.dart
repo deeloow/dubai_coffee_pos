@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import '../core/responsive.dart';
 
 // ─── App Text ─────────────────────────────────────────────────────────────────
 
@@ -22,18 +23,128 @@ class AppText extends StatelessWidget {
       this.maxLines,
       this.overflow});
 
+  double _responsiveFontSize(BuildContext context, double baseSize) {
+    final responsive = ResponsiveLayout.of(context);
+    return baseSize * responsive.scale;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final fontSize = _responsiveFontSize(context, size ?? 13);
     return Text(text,
         textAlign: align,
         softWrap: true,
         maxLines: maxLines,
         overflow: overflow,
         style: GoogleFonts.dmSans(
-          fontSize: size ?? 13,
+          fontSize: fontSize,
           fontWeight: weight ?? FontWeight.normal,
           color: color ?? AppColors.espresso,
         ));
+  }
+}
+
+// ─── Dialog Header ─────────────────────────────────────────────────────────
+
+class DialogHeader extends StatelessWidget {
+  final String title;
+  final VoidCallback? onClose;
+  final double? titleSize;
+  final FontWeight? titleWeight;
+
+  const DialogHeader({
+    super.key,
+    required this.title,
+    this.onClose,
+    this.titleSize,
+    this.titleWeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: AppText(
+            title,
+            size: titleSize ?? 15,
+            weight: titleWeight ?? FontWeight.w600,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          onPressed: onClose ?? () => Navigator.maybePop(context),
+          icon: const Icon(Icons.close_rounded, size: 20),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          tooltip: 'Close',
+        ),
+      ],
+    );
+  }
+}
+
+class KeyboardSafeDialog extends StatelessWidget {
+  final Widget child;
+  final double maxHeightFactor;
+  final EdgeInsets insetPadding;
+
+  const KeyboardSafeDialog({
+    super.key,
+    required this.child,
+    this.maxHeightFactor = 0.86,
+    this.insetPadding = const EdgeInsets.fromLTRB(20, 20, 20, 20),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * maxHeightFactor;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        left: insetPadding.left,
+        right: insetPadding.right,
+        top: insetPadding.top,
+        bottom: insetPadding.bottom + (keyboardHeight > 0 ? keyboardHeight : 0),
+      ),
+      child: MediaQuery.removeViewInsets(
+        removeBottom: true,
+        context: context,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class KeyboardSafeSheet extends StatelessWidget {
+  final Widget child;
+
+  const KeyboardSafeSheet({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? keyboardHeight + 8 : 0),
+      child: MediaQuery.removeViewInsets(
+        removeBottom: true,
+        context: context,
+        child: child,
+      ),
+    );
   }
 }
 
@@ -68,6 +179,7 @@ class StatCard extends StatelessWidget {
   final bool gold;
   final String? delta;
   final bool deltaUp;
+  final bool compact;
 
   const StatCard({
     super.key,
@@ -76,30 +188,39 @@ class StatCard extends StatelessWidget {
     this.gold = false,
     this.delta,
     this.deltaUp = true,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = compact;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(isCompact ? 8 : 12),
       decoration: BoxDecoration(
         color: AppColors.bgLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.borderColor, width: 0.5),
+        borderRadius: BorderRadius.circular(isCompact ? 8 : 10),
+        border: Border.all(color: AppColors.borderColor, width: isCompact ? 0.4 : 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          AppText(label, size: 11, color: AppColors.textMuted),
-          const SizedBox(height: 4),
+          AppText(label,
+              size: isCompact ? 10 : 11,
+              color: AppColors.textMuted,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+          SizedBox(height: isCompact ? 2 : 4),
           AppText(value,
-              size: 18,
+              size: isCompact ? 14 : 18,
               weight: FontWeight.w600,
-              color: gold ? AppColors.goldDark : AppColors.espresso),
+              color: gold ? AppColors.goldDark : AppColors.espresso,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
           if (delta != null) ...[
-            const SizedBox(height: 2),
+            SizedBox(height: isCompact ? 1 : 2),
             AppText(delta!,
-                size: 10,
+                size: isCompact ? 9 : 10,
                 color: deltaUp ? AppColors.green : AppColors.red),
           ]
         ],
@@ -139,7 +260,7 @@ class GoldButton extends StatelessWidget {
             ? AppColors.espresso
             : AppColors.goldLight;
     final border = danger
-        ? AppColors.red.withOpacity(0.4)
+        ? AppColors.red.withValues(alpha: 0.4)
         : outlined
             ? AppColors.borderColor
             : AppColors.espresso;

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/local_order_socket_provider.dart';
@@ -24,7 +26,23 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
       );
       return;
     }
+
+    final address = InternetAddress.tryParse(host);
+    if (address == null || address.type != InternetAddressType.IPv4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid IPv4 address.')),
+      );
+      return;
+    }
+
     final port = int.tryParse(_portController.text.trim()) ?? 4567;
+    if (port <= 0 || port > 65535) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid port between 1 and 65535.')),
+      );
+      return;
+    }
+
     setState(() => _connecting = true);
     await provider.connect(host, port: port);
     setState(() => _connecting = false);
@@ -34,18 +52,24 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
     await provider.disconnect();
   }
 
+  // Recent hosts removed; user must enter host manually.
+
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Kitchen Socket Client')),
       backgroundColor: AppColors.cream,
       body: Consumer<LocalOrderSocketProvider>(
         builder: (context, provider, _) {
           final peers = provider.connectedPeers;
-          final lastOrder = provider.lastReceivedOrder;
+          final showReconnectBadge = provider.shouldAutoReconnect && !provider.isConnected;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
             children: [
               SectionCard(
                 child: Column(
@@ -53,6 +77,7 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
                   children: [
                     const AppText('Kitchen Receiver', size: 15, weight: FontWeight.w700),
                     const SizedBox(height: 12),
+                    const SizedBox.shrink(),
                     TextFormField(
                       controller: _hostController,
                       decoration: const InputDecoration(
@@ -78,7 +103,9 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: provider.isConnected ? () => _disconnect(provider) : null,
+                            onPressed: provider.isConnected || provider.shouldAutoReconnect
+                                ? () => _disconnect(provider)
+                                : null,
                             child: const Text('Disconnect'),
                           ),
                         ),
@@ -87,6 +114,49 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
                     const SizedBox(height: 12),
                     _StatusRow(label: 'Connection', value: provider.connectionState),
                     const SizedBox(height: 8),
+                    if (showReconnectBadge) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: provider.status == 'reconnecting'
+                              ? const Color(0xFFFFF4E5)
+                              : const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: provider.status == 'reconnecting'
+                                ? Colors.orange.shade400
+                                : Colors.green.shade400,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (provider.status == 'reconnecting')
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              Icon(Icons.link, size: 14, color: Colors.green.shade700),
+                            const SizedBox(width: 6),
+                            Text(
+                              provider.status == 'reconnecting'
+                                  ? 'Reconnecting…'
+                                  : 'Auto-reconnect enabled',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: provider.status == 'reconnecting'
+                                    ? Colors.orange.shade800
+                                    : Colors.green.shade800,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     _StatusRow(label: 'Connected Host', value: provider.host),
                     const SizedBox(height: 8),
                     _StatusRow(label: 'Active link', value: peers.isNotEmpty ? peers.join(', ') : 'None'),
@@ -94,59 +164,6 @@ class _KitchenSocketScreenState extends State<KitchenSocketScreen> {
                       const SizedBox(height: 12),
                       Text(provider.error!, style: const TextStyle(color: Colors.red)),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (lastOrder != null)
-                SectionCard(
-                  color: AppColors.bgLight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const AppText('Last Received Order', size: 15, weight: FontWeight.w700),
-                      const SizedBox(height: 10),
-                      Text('Order #${lastOrder.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      Text('Table: ${lastOrder.customerName}'),
-                      Text('Items: ${lastOrder.items.map((item) => '${item.qty}× ${item.name}').join(', ')}'),
-                      Text('Status: ${lastOrder.statusLabel}'),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 16),
-              SectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const AppText('Received Orders', size: 15, weight: FontWeight.w700),
-                    const SizedBox(height: 12),
-                    if (provider.receivedOrders.isEmpty)
-                      const AppText('No orders received yet.', size: 13, color: AppColors.textMuted)
-                    else
-                      ...provider.receivedOrders.map(
-                        (order) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppColors.borderColor, width: 0.5),
-                              color: AppColors.white,
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Order #${order.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                Text(order.customerName),
-                                const SizedBox(height: 4),
-                                Text(order.items.map((item) => '${item.qty}× ${item.name}').join(', ')),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),

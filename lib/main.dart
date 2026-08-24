@@ -8,6 +8,7 @@ import 'services/local_order_socket_provider.dart';
 import 'services/order_service.dart';
 import 'services/pos_provider.dart';
 import 'theme/app_theme.dart';
+import 'core/responsive.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_shell.dart';
 
@@ -21,10 +22,12 @@ void main() async {
   await Hive.openBox('orders');
   await Hive.openBox('inventory');
   await Hive.openBox('menu');
+  await Hive.openBox('menu_categories');
   await Hive.openBox('assignments');
   await Hive.openBox('recipes');
   await Hive.openBox('session');
   await Hive.openBox('settings');
+  await Hive.openBox('reports_history');
 
   await InventoryService().seedInventoryIfEmpty();
 
@@ -34,8 +37,34 @@ void main() async {
   runApp(const DubaiCoffeeApp());
 }
 
-class DubaiCoffeeApp extends StatelessWidget {
+class DubaiCoffeeApp extends StatefulWidget {
   const DubaiCoffeeApp({super.key});
+
+  @override
+  State<DubaiCoffeeApp> createState() => _DubaiCoffeeAppState();
+}
+
+class _DubaiCoffeeAppState extends State<DubaiCoffeeApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed) {
+      final provider = context.read<LocalOrderSocketProvider>();
+      provider.resumeConnection();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,11 +74,21 @@ class DubaiCoffeeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PosProvider()),
         ChangeNotifierProvider(create: (_) => LocalOrderSocketProvider()..init()),
       ],
-      child: MaterialApp(
-        title: 'Dubai Coffee POS',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.theme,
-        home: const _RootRouter(),
+      child: Builder(
+        builder: (context) {
+          final responsive = ResponsiveLayout.of(context);
+          return MaterialApp(
+            title: 'Dubai Coffee POS',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.theme.copyWith(
+              visualDensity: VisualDensity.compact,
+              textTheme: AppTheme.theme.textTheme.apply(
+                fontSizeFactor: responsive.scale,
+              ),
+            ),
+            home: const _RootRouter(),
+          );
+        },
       ),
     );
   }

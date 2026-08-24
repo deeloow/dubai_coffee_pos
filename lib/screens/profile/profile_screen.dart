@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/responsive.dart';
 import '../../models/models.dart';
 import '../../services/auth_provider.dart';
 import '../admin/admin_qr_screen.dart';
@@ -16,251 +17,396 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
+    final responsive = ResponsiveLayout.of(context);
+    final isLandscape = responsive.isLandscape;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(title: const Text('Profile & Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          isLandscape ? 12 : 16,
+          isLandscape ? 12 : 16,
+          isLandscape ? 12 : 16,
+          (isLandscape ? 12 : 16) + bottomInset,
+        ),
         children: [
-          // Avatar card
-          SectionCard(
-            child: Row(
+          if (isLandscape)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.espresso,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(
-                      user?.name.isNotEmpty == true
-                          ? user!.name[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        color: AppColors.goldLight,
-                        fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Column(
+                    children: [
+                      SectionCard(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: AppColors.espresso,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  user?.name.isNotEmpty == true
+                                      ? user!.name[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    color: AppColors.goldLight,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  AppText(user?.name ?? '—', size: 16, weight: FontWeight.w600),
+                                  const SizedBox(height: 2),
+                                  AppText(user?.email ?? '—', size: 12, color: AppColors.textMuted),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: user?.role == UserRole.admin
+                                          ? AppColors.goldDark.withAlpha((0.15 * 255).round())
+                                          : AppColors.bgLight,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: AppText(
+                                      user?.role == UserRole.admin ? 'Admin' : 'Barista',
+                                      size: 10,
+                                      weight: FontWeight.w600,
+                                      color: user?.role == UserRole.admin
+                                          ? AppColors.goldDark
+                                          : AppColors.brown2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      SectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const AppText('Permissions', size: 13, weight: FontWeight.w600),
+                            const SizedBox(height: 12),
+                            const _PermRow(icon: Icons.shopping_cart_outlined, label: 'Process Orders', allowed: true),
+                            const _PermRow(icon: Icons.history, label: 'View Order History', allowed: true),
+                            const _PermRow(icon: Icons.kitchen_outlined, label: 'Kitchen Display', allowed: true),
+                            _PermRow(icon: Icons.inventory_2_outlined, label: 'Inventory Management', allowed: user?.role == UserRole.admin),
+                            _PermRow(icon: Icons.bar_chart, label: 'Sales Reports', allowed: user?.role == UserRole.admin),
+                            _PermRow(icon: Icons.people_outline, label: 'User Management', allowed: user?.role == UserRole.admin),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
+                  child: Column(
+                    children: [
+                      if (user?.role == UserRole.admin)
+                        SectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const AppText('Admin Actions', size: 13, weight: FontWeight.w600),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MenuScreen()));
+                                },
+                                icon: const Icon(Icons.menu_book_outlined),
+                                label: const Text('Manage Menu'),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CashierSocketScreen()));
+                                },
+                                icon: const Icon(Icons.wifi_tethering),
+                                label: const Text('Open Cashier Hotspot Server'),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminQrScreen()));
+                                },
+                                icon: const Icon(Icons.qr_code),
+                                label: const Text('Manage Payment QR Code'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (user?.role == UserRole.admin) const SizedBox(height: 12),
+                      SectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const AppText('Local Socket', size: 13, weight: FontWeight.w600),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const KitchenSocketScreen()));
+                              },
+                              icon: const Icon(Icons.router),
+                              label: const Text('Open Kitchen Receiver'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const SectionCard(
+                        child: Column(
+                          children: [
+                            _InfoRow(label: 'App Version', value: '1.0.0'),
+                            _InfoRow(label: 'Build', value: 'Dubai Coffee POS'),
+                            _InfoRow(label: 'Session', value: 'Active'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.logout, size: 18),
+                          label: const Text('Sign Out'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFCEBEB),
+                            foregroundColor: AppColors.red,
+                            side: const BorderSide(color: Color(0xFFF09595), width: 0.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (dialogContext) => AlertDialog(
+                                title: DialogHeader(
+                                  title: 'Sign Out?',
+                                  onClose: () => Navigator.pop(dialogContext, false),
+                                ),
+                                content: const Text('Are you sure you want to sign out?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign Out', style: TextStyle(color: AppColors.red))),
+                                ],
+                              ),
+                            );
+                            if (confirm == true && context.mounted) {
+                              await context.read<AuthProvider>().signOut();
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                // Avatar card
+                SectionCard(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.espresso,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Center(
+                          child: Text(
+                            user?.name.isNotEmpty == true
+                                ? user!.name[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              color: AppColors.goldLight,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppText(user?.name ?? '—', size: 16, weight: FontWeight.w600),
+                            const SizedBox(height: 2),
+                            AppText(user?.email ?? '—', size: 12, color: AppColors.textMuted),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: user?.role == UserRole.admin
+                                    ? AppColors.goldDark.withAlpha((0.15 * 255).round())
+                                    : AppColors.bgLight,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: AppText(
+                                user?.role == UserRole.admin ? 'Admin' : 'Barista',
+                                size: 10,
+                                weight: FontWeight.w600,
+                                color: user?.role == UserRole.admin
+                                    ? AppColors.goldDark
+                                    : AppColors.brown2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Permissions
+                SectionCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AppText(user?.name ?? '—',
-                          size: 16, weight: FontWeight.w600),
-                      const SizedBox(height: 2),
-                      AppText(user?.email ?? '—',
-                          size: 12, color: AppColors.textMuted),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: user?.role == UserRole.admin
-                              ? AppColors.goldDark
-                                  .withAlpha((0.15 * 255).round())
-                              : AppColors.bgLight,
-                          borderRadius: BorderRadius.circular(20),
+                      const AppText('Permissions', size: 13, weight: FontWeight.w600),
+                      const SizedBox(height: 12),
+                      const _PermRow(icon: Icons.shopping_cart_outlined, label: 'Process Orders', allowed: true),
+                      const _PermRow(icon: Icons.history, label: 'View Order History', allowed: true),
+                      const _PermRow(icon: Icons.kitchen_outlined, label: 'Kitchen Display', allowed: true),
+                      _PermRow(icon: Icons.inventory_2_outlined, label: 'Inventory Management', allowed: user?.role == UserRole.admin),
+                      _PermRow(icon: Icons.bar_chart, label: 'Sales Reports', allowed: user?.role == UserRole.admin),
+                      _PermRow(icon: Icons.people_outline, label: 'User Management', allowed: user?.role == UserRole.admin),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                if (user?.role == UserRole.admin)
+                  SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const AppText('Admin Actions', size: 13, weight: FontWeight.w600),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const MenuScreen()));
+                          },
+                          icon: const Icon(Icons.menu_book_outlined),
+                          label: const Text('Manage Menu'),
                         ),
-                        child: AppText(
-                          user?.role == UserRole.admin ? 'Admin' : 'Barista',
-                          size: 10,
-                          weight: FontWeight.w600,
-                          color: user?.role == UserRole.admin
-                              ? AppColors.goldDark
-                              : AppColors.brown2,
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const CashierSocketScreen()));
+                          },
+                          icon: const Icon(Icons.wifi_tethering),
+                          label: const Text('Open Cashier Hotspot Server'),
                         ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminQrScreen()));
+                          },
+                          icon: const Icon(Icons.qr_code),
+                          label: const Text('Manage Payment QR Code'),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Local socket for kitchen (available to all roles)
+                SectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const AppText('Local Socket', size: 13, weight: FontWeight.w600),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const KitchenSocketScreen()));
+                        },
+                        icon: const Icon(Icons.router),
+                        label: const Text('Open Kitchen Receiver'),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
 
-          const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-          // Permissions
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppText('Permissions', size: 13, weight: FontWeight.w600),
-                const SizedBox(height: 12),
-                const _PermRow(
-                  icon: Icons.shopping_cart_outlined,
-                  label: 'Process Orders',
-                  allowed: true,
-                ),
-                const _PermRow(
-                  icon: Icons.history,
-                  label: 'View Order History',
-                  allowed: true,
-                ),
-                const _PermRow(
-                  icon: Icons.kitchen_outlined,
-                  label: 'Kitchen Display',
-                  allowed: true,
-                ),
-                _PermRow(
-                  icon: Icons.inventory_2_outlined,
-                  label: 'Inventory Management',
-                  allowed: user?.role == UserRole.admin,
-                ),
-                _PermRow(
-                  icon: Icons.bar_chart,
-                  label: 'Sales Reports',
-                  allowed: user?.role == UserRole.admin,
-                ),
-                _PermRow(
-                  icon: Icons.people_outline,
-                  label: 'User Management',
-                  allowed: user?.role == UserRole.admin,
-                ),
-              ],
-            ),
-          ),
+                const SizedBox(height: 16),
 
-          const SizedBox(height: 16),
-
-          if (user?.role == UserRole.admin)
-            SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const AppText('Admin Actions',
-                      size: 13, weight: FontWeight.w600),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MenuScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.menu_book_outlined),
-                    label: const Text('Manage Menu'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CashierSocketScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.wifi_tethering),
-                    label: const Text('Open Cashier Hotspot Server'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AdminQrScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.qr_code),
-                    label: const Text('Manage Payment QR Code'),
-                  ),
-                ],
-              ),
-            ),
-
-          const SizedBox(height: 16),
-
-          // Local socket for kitchen (available to all roles)
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const AppText('Local Socket',
-                    size: 13, weight: FontWeight.w600),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const KitchenSocketScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.router),
-                  label: const Text('Open Kitchen Receiver'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          const SizedBox(height: 16),
-
-          // App info
-          const SectionCard(
-            child: Column(
-              children: [
-                _InfoRow(label: 'App Version', value: '1.0.0'),
-                _InfoRow(label: 'Build', value: 'Dubai Coffee POS'),
-                _InfoRow(label: 'Session', value: 'Active'),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Sign out
-          SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.logout, size: 18),
-              label: const Text('Sign Out'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFCEBEB),
-                foregroundColor: AppColors.red,
-                side: const BorderSide(color: Color(0xFFF09595), width: 0.5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Sign Out?'),
-                    content: const Text('Are you sure you want to sign out?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Sign Out',
-                            style: TextStyle(color: AppColors.red)),
-                      ),
+                // App info
+                const SectionCard(
+                  child: Column(
+                    children: [
+                      _InfoRow(label: 'App Version', value: '1.0.0'),
+                      _InfoRow(label: 'Build', value: 'Dubai Coffee POS'),
+                      _InfoRow(label: 'Session', value: 'Active'),
                     ],
                   ),
-                );
-                if (confirm == true && context.mounted) {
-                  await context.read<AuthProvider>().signOut();
-                }
-              },
+                ),
+
+                const SizedBox(height: 24),
+
+                // Sign out
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Sign Out'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFCEBEB),
+                      foregroundColor: AppColors.red,
+                      side: const BorderSide(color: Color(0xFFF09595), width: 0.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (dialogContext) => AlertDialog(
+                          title: DialogHeader(
+                            title: 'Sign Out?',
+                            onClose: () => Navigator.pop(dialogContext, false),
+                          ),
+                          content: const Text('Are you sure you want to sign out?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign Out', style: TextStyle(color: AppColors.red))),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && context.mounted) {
+                        await context.read<AuthProvider>().signOut();
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
-          ),
-          const SizedBox(height: 20),
         ],
       ),
     );

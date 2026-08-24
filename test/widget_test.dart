@@ -37,6 +37,8 @@ void main() {
       icon: '🍓',
       qty: 1,
     );
+    // Set cup size for fallback recipe test
+    orderItem.cupSize = '12oz';
 
     final ingredients = fallbackRecipeIngredientsForOrderItem(
       orderItem,
@@ -48,7 +50,32 @@ void main() {
     expect(ingredients.single.quantityNeeded, 1.0);
   });
 
-  testWidgets('Receipt sheet renders order details', (WidgetTester tester) async {
+  test('Order preserves prepared-by barista metadata', () {
+    final order = Order(
+      id: 'test-order',
+      orderNumber: 1,
+      customerName: 'Test Customer',
+      cashierName: 'Cashier',
+      items: const [],
+      subtotal: 0,
+      discount: 0,
+      discountLabel: 'No discount',
+      total: 0,
+      tendered: 0,
+      change: 0,
+      paymentMethod: PaymentMethod.cash,
+      createdAt: DateTime.parse('2026-06-14T10:00:00Z'),
+      status: OrderStatus.paid,
+      preparedBy: 'John Doe',
+    );
+
+    final map = order.toMap();
+    final restored = Order.fromMap(map);
+
+    expect(restored.preparedBy, 'John Doe');
+  });
+
+  testWidgets('Receipt sheet renders prepared-by barista details', (WidgetTester tester) async {
     final order = Order(
       id: 'test-order',
       orderNumber: 1,
@@ -72,6 +99,7 @@ void main() {
       paymentMethod: PaymentMethod.cash,
       createdAt: DateTime.now(),
       status: OrderStatus.paid,
+      preparedBy: 'John Doe',
     );
 
     await tester.pumpWidget(
@@ -84,7 +112,9 @@ void main() {
 
     expect(find.text('Dubai Coffee'), findsOneWidget);
     expect(find.text('Official Receipt'), findsOneWidget);
-    expect(find.text('Espresso × 2'), findsOneWidget);
+    expect(find.text('Espresso (12oz) × 2'), findsOneWidget);
+    expect(find.text('Prepared By:'), findsOneWidget);
+    expect(find.text('John Doe'), findsOneWidget);
     expect(find.text('₱268.80'), findsOneWidget);
   });
 }
