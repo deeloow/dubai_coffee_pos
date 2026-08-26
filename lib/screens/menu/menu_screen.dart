@@ -12,7 +12,9 @@ import '../../services/local_order_socket_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
-Widget buildMenuItemImage(String? imagePath, String? imageBase64, String? imageMimeType, {double size = 56}) {
+Widget buildMenuItemImage(
+    String? imagePath, String? imageBase64, String? imageMimeType,
+    {double size = 56}) {
   if ((imageBase64 ?? '').isNotEmpty) {
     try {
       return Image.memory(
@@ -29,7 +31,8 @@ Widget buildMenuItemImage(String? imagePath, String? imageBase64, String? imageM
       : MenuItem.defaultDrinkImageAsset;
 
   if (resolvedPath.startsWith('assets/')) {
-    return Image.asset(resolvedPath, width: size, height: size, fit: BoxFit.cover);
+    return Image.asset(resolvedPath,
+        width: size, height: size, fit: BoxFit.cover);
   }
 
   final file = File(resolvedPath);
@@ -158,9 +161,14 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
-  Future<void> _showAddCategoryDialog() async {
+  Future<void> _showAddCategoryDialog({Map<String, dynamic>? category}) async {
     final controller = TextEditingController();
-    CategoryCupSizeType selectedType = CategoryCupSizeType.twelveAndSixteen;
+    final isEditing = category != null;
+    controller.text = category?['name']?.toString() ?? '';
+    CategoryCupSizeType selectedType = category == null
+        ? CategoryCupSizeType.twelveAndSixteen
+        : CategoryCupSizeTypeX.fromPersisted(
+            category['cupSizeType']?.toString());
 
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
@@ -168,7 +176,7 @@ class _MenuScreenState extends State<MenuScreen> {
       builder: (dialogCtx) => StatefulBuilder(
         builder: (_, setDialogState) => AlertDialog(
           title: DialogHeader(
-            title: 'Add Category',
+            title: isEditing ? 'Edit Category' : 'Add Category',
             onClose: () => Navigator.pop(dialogCtx),
           ),
           content: SizedBox(
@@ -186,7 +194,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text('Cup Size', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Cup Size',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 RadioListTile<CategoryCupSizeType>(
                   dense: true,
@@ -194,7 +203,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   value: CategoryCupSizeType.twelveAndSixteen,
                   groupValue: selectedType,
                   title: const Text('12oz and 16oz'),
-                  onChanged: (value) => setDialogState(() => selectedType = value ?? selectedType),
+                  onChanged: (value) => setDialogState(
+                      () => selectedType = value ?? selectedType),
                 ),
                 RadioListTile<CategoryCupSizeType>(
                   dense: true,
@@ -202,7 +212,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   value: CategoryCupSizeType.twelveOnly,
                   groupValue: selectedType,
                   title: const Text('12oz only'),
-                  onChanged: (value) => setDialogState(() => selectedType = value ?? selectedType),
+                  onChanged: (value) => setDialogState(
+                      () => selectedType = value ?? selectedType),
                 ),
                 RadioListTile<CategoryCupSizeType>(
                   dense: true,
@@ -210,7 +221,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   value: CategoryCupSizeType.sixteenOnly,
                   groupValue: selectedType,
                   title: const Text('16oz only'),
-                  onChanged: (value) => setDialogState(() => selectedType = value ?? selectedType),
+                  onChanged: (value) => setDialogState(
+                      () => selectedType = value ?? selectedType),
                 ),
                 RadioListTile<CategoryCupSizeType>(
                   dense: true,
@@ -218,7 +230,8 @@ class _MenuScreenState extends State<MenuScreen> {
                   value: CategoryCupSizeType.regularAndMedium,
                   groupValue: selectedType,
                   title: const Text('Regular and Medium'),
-                  onChanged: (value) => setDialogState(() => selectedType = value ?? selectedType),
+                  onChanged: (value) => setDialogState(
+                      () => selectedType = value ?? selectedType),
                 ),
               ],
             ),
@@ -237,9 +250,10 @@ class _MenuScreenState extends State<MenuScreen> {
                   );
                   return;
                 }
-                Navigator.pop(dialogCtx, {'name': name, 'cupSizeType': selectedType});
+                Navigator.pop(
+                    dialogCtx, {'name': name, 'cupSizeType': selectedType});
               },
-              child: const Text('Add Category'),
+              child: Text(isEditing ? 'Save' : 'Add Category'),
             ),
           ],
         ),
@@ -248,9 +262,17 @@ class _MenuScreenState extends State<MenuScreen> {
 
     if (result == null) return;
     final name = result['name'] as String? ?? '';
-    final type = result['cupSizeType'] as CategoryCupSizeType? ?? CategoryCupSizeType.twelveAndSixteen;
+    final type = result['cupSizeType'] as CategoryCupSizeType? ??
+        CategoryCupSizeType.twelveAndSixteen;
 
-    final error = await _menuSvc!.addCategory(name, type);
+    final error = isEditing
+        ? await _menuSvc!.updateCategory(
+            category!['id']?.toString() ?? '',
+            category['name']?.toString() ?? '',
+            name,
+            type,
+          )
+        : await _menuSvc!.addCategory(name, type);
     if (!mounted) return;
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -264,6 +286,19 @@ class _MenuScreenState extends State<MenuScreen> {
     setState(() => _categoryFilter = name);
   }
 
+  Future<void> _editCategory(String categoryName) async {
+    final entries = await _menuSvc!.fetchCategoryEntries();
+    final category = entries.cast<Map<String, dynamic>?>().firstWhere(
+          (entry) =>
+              entry?['name']?.toString().toLowerCase() ==
+              categoryName.toLowerCase(),
+          orElse: () => null,
+        );
+    if (category != null && mounted) {
+      await _showAddCategoryDialog(category: category);
+    }
+  }
+
   void _showAddEditDialog(BuildContext context, {MenuItem? item}) {
     showModalBottomSheet(
       context: context,
@@ -271,7 +306,7 @@ class _MenuScreenState extends State<MenuScreen> {
       isDismissible: false,
       enableDrag: false,
       backgroundColor: Colors.transparent,
-          builder: (_) => _MenuFormSheet(
+      builder: (_) => _MenuFormSheet(
         item: item,
         onSave: (menuItem) async {
           if (item == null) {
@@ -290,7 +325,8 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = widget.isAdminOverride ?? context.watch<AuthProvider>().isAdmin;
+    final isAdmin =
+        widget.isAdminOverride ?? context.watch<AuthProvider>().isAdmin;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -351,7 +387,7 @@ class _MenuScreenState extends State<MenuScreen> {
                     ],
                   ),
                 );
-                    if (confirm == true) {
+                if (confirm == true) {
                   try {
                     await _menuSvc!.replaceMenuWithStandardSeed();
                     await _syncMenuWithPeers();
@@ -455,9 +491,24 @@ class _MenuScreenState extends State<MenuScreen> {
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: () async {
+                                      await _editCategory(cat);
+                                    },
+                                    child: const Text(
+                                      'Edit',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.espresso,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () async {
                                       await _deleteCategory(cat);
                                     },
-                                    child: const Icon(Icons.close, size: 14, color: AppColors.red),
+                                    child: const Icon(Icons.close,
+                                        size: 14, color: AppColors.red),
                                   ),
                                 ],
                               ],
@@ -544,31 +595,32 @@ class _MenuScreenState extends State<MenuScreen> {
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      AppText('₱${(item.priceByCupSize['16oz'] ?? item.price).toStringAsFixed(2)}',
+                                      AppText(
+                                          '₱${(item.priceByCupSize['16oz'] ?? item.price).toStringAsFixed(2)}',
                                           size: 13,
                                           weight: FontWeight.w600),
                                       if (isAdmin) ...[
                                         const SizedBox(width: 12),
                                         IconButton(
-                                          icon: const Icon(
-                                              Icons.edit_outlined,
+                                          icon: const Icon(Icons.edit_outlined,
                                               size: 20),
                                           onPressed: () => _showAddEditDialog(
                                               context,
                                               item: item),
                                         ),
                                         IconButton(
-                                          icon: const Icon(
-                                              Icons.delete_outline,
+                                          icon: const Icon(Icons.delete_outline,
                                               size: 20),
                                           onPressed: () async {
                                             final confirmed =
                                                 await showDialog<bool>(
                                               context: context,
-                                              builder: (dialogContext) => AlertDialog(
+                                              builder: (dialogContext) =>
+                                                  AlertDialog(
                                                 title: DialogHeader(
                                                   title: 'Delete Menu Item?',
-                                                  onClose: () => Navigator.pop(dialogContext, false),
+                                                  onClose: () => Navigator.pop(
+                                                      dialogContext, false),
                                                 ),
                                                 content: Text(
                                                     'Remove "${item.name}" from the menu?'),
@@ -576,13 +628,15 @@ class _MenuScreenState extends State<MenuScreen> {
                                                   TextButton(
                                                     onPressed: () =>
                                                         Navigator.pop(
-                                                            dialogContext, false),
+                                                            dialogContext,
+                                                            false),
                                                     child: const Text('Cancel'),
                                                   ),
                                                   TextButton(
                                                     onPressed: () =>
                                                         Navigator.pop(
-                                                            dialogContext, true),
+                                                            dialogContext,
+                                                            true),
                                                     child: const Text('Delete',
                                                         style: TextStyle(
                                                             color:
@@ -592,7 +646,8 @@ class _MenuScreenState extends State<MenuScreen> {
                                               ),
                                             );
                                             if (confirmed == true) {
-                                              await _menuSvc!.deleteItem(item.id);
+                                              await _menuSvc!
+                                                  .deleteItem(item.id);
                                               await _syncMenuWithPeers();
                                             }
                                           },
@@ -657,9 +712,11 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
 
   CategoryCupSizeType _selectedCupType = CategoryCupSizeType.twelveAndSixteen;
 
-  bool get _isSnacksCategory => _selectedCupType == CategoryCupSizeType.regularAndMedium;
+  bool get _isSnacksCategory =>
+      _selectedCupType == CategoryCupSizeType.regularAndMedium;
 
-  bool get _is16ozOnlyCategory => _selectedCupType == CategoryCupSizeType.sixteenOnly;
+  bool get _is16ozOnlyCategory =>
+      _selectedCupType == CategoryCupSizeType.sixteenOnly;
 
   Future<void> _applyCategoryConfiguration(String categoryName) async {
     final type = await MenuService().categoryCupSizeType(categoryName);
@@ -704,21 +761,30 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
     final item = widget.item;
     _nameCtrl = TextEditingController(text: item?.name ?? '');
     _price12Ctrl = TextEditingController(
-      text: item?.priceByCupSize['12oz']?.toStringAsFixed(2) ?? item?.price.toStringAsFixed(2) ?? '',
+      text: item?.priceByCupSize['12oz']?.toStringAsFixed(2) ??
+          item?.price.toStringAsFixed(2) ??
+          '',
     );
     _price16Ctrl = TextEditingController(
-      text: item?.priceByCupSize['16oz']?.toStringAsFixed(2) ?? item?.price.toStringAsFixed(2) ?? '',
+      text: item?.priceByCupSize['16oz']?.toStringAsFixed(2) ??
+          item?.price.toStringAsFixed(2) ??
+          '',
     );
     _priceRegularCtrl = TextEditingController(
-      text: item?.priceByCupSize['Regular']?.toStringAsFixed(2) ?? item?.price.toStringAsFixed(2) ?? '',
+      text: item?.priceByCupSize['Regular']?.toStringAsFixed(2) ??
+          item?.price.toStringAsFixed(2) ??
+          '',
     );
     _priceMediumCtrl = TextEditingController(
-      text: item?.priceByCupSize['Medium']?.toStringAsFixed(2) ?? item?.price.toStringAsFixed(2) ?? '',
+      text: item?.priceByCupSize['Medium']?.toStringAsFixed(2) ??
+          item?.price.toStringAsFixed(2) ??
+          '',
     );
     _badgeCtrl = TextEditingController(text: item?.badge ?? '');
     _loadCategories();
     _category = item?.category ?? 'Coffee-espresso base';
-    _selectedCupType = item?.cupSizeType ?? MenuItem.inferDefaultCupSizeType(_category);
+    _selectedCupType =
+        item?.cupSizeType ?? MenuItem.inferDefaultCupSizeType(_category);
     _available = item?.available ?? true;
   }
 
@@ -727,7 +793,9 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
     if (!mounted) return;
     setState(() {
       _categories = names;
-      final validCategory = names.contains(_category) ? _category : (names.isNotEmpty ? names.first : 'Coffee-espresso base');
+      final validCategory = names.contains(_category)
+          ? _category
+          : (names.isNotEmpty ? names.first : 'Coffee-espresso base');
       if (validCategory != _category) {
         _category = validCategory;
       }
@@ -758,16 +826,18 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
       if (platformFile != null && !{'png', 'jpg', 'jpeg'}.contains(extension)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a PNG, JPG, or JPEG image.')),
+            const SnackBar(
+                content: Text('Please select a PNG, JPG, or JPEG image.')),
           );
         }
         return;
       }
       if (platformFile != null) {
         setState(() {
-          _selectedImageFile = platformFile.path != null && platformFile.path!.isNotEmpty
-              ? File(platformFile.path!)
-              : null;
+          _selectedImageFile =
+              platformFile.path != null && platformFile.path!.isNotEmpty
+                  ? File(platformFile.path!)
+                  : null;
           _selectedImageBytes = platformFile.bytes;
           _clearImageRequested = false;
         });
@@ -783,7 +853,8 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final categoryCupType = await MenuService().categoryCupSizeType(_category);
+      final categoryCupType =
+          await MenuService().categoryCupSizeType(_category);
       final resolvedSizes = categoryCupType.availableSizes;
       final resolvedCupSize = resolvedSizes.first;
       MenuImageData? imageData;
@@ -795,7 +866,8 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
 
       if (_clearImageRequested) {
         if (widget.item != null && widget.item!.id.isNotEmpty) {
-          await menuService.clearMenuImage(widget.item!.id, previousPath: widget.item?.imagePath);
+          await menuService.clearMenuImage(widget.item!.id,
+              previousPath: widget.item?.imagePath);
         }
         nextImagePath = MenuItem.defaultDrinkImageAsset;
         nextImageBase64 = null;
@@ -819,13 +891,15 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
         nextImageBase64 = imageData?.base64;
         nextImageMimeType = imageData?.mimeType;
       } else {
-        nextImagePath = widget.item?.imagePath ?? MenuItem.defaultDrinkImageAsset;
+        nextImagePath =
+            widget.item?.imagePath ?? MenuItem.defaultDrinkImageAsset;
         nextImageBase64 = widget.item?.imageBase64;
         nextImageMimeType = widget.item?.imageMimeType;
       }
 
       final existing = widget.item;
-      final isCoffeeBase = categoryCupType == CategoryCupSizeType.twelveAndSixteen;
+      final isCoffeeBase =
+          categoryCupType == CategoryCupSizeType.twelveAndSixteen;
       final isSnacks = categoryCupType == CategoryCupSizeType.regularAndMedium;
       final is16ozOnly = categoryCupType == CategoryCupSizeType.sixteenOnly;
       final is12ozOnly = categoryCupType == CategoryCupSizeType.twelveOnly;
@@ -834,10 +908,14 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
       late double mainPrice;
 
       if (isCoffeeBase) {
-        final price12Error = _validatePriceValue(_price12Ctrl.text, label: '12oz');
-        final price16Error = _validatePriceValue(_price16Ctrl.text, label: '16oz');
+        final price12Error =
+            _validatePriceValue(_price12Ctrl.text, label: '12oz');
+        final price16Error =
+            _validatePriceValue(_price16Ctrl.text, label: '16oz');
         if (price12Error != null || price16Error != null) {
-          final message = price12Error ?? price16Error ?? 'Please enter a valid numeric price.';
+          final message = price12Error ??
+              price16Error ??
+              'Please enter a valid numeric price.';
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(message), backgroundColor: AppColors.red),
@@ -851,10 +929,14 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
         priceByCupSize = {'12oz': price12, '16oz': price16};
         mainPrice = price16;
       } else if (isSnacks) {
-        final priceRegularError = _validatePriceValue(_priceRegularCtrl.text, label: 'Regular');
-        final priceMediumError = _validatePriceValue(_priceMediumCtrl.text, label: 'Medium');
+        final priceRegularError =
+            _validatePriceValue(_priceRegularCtrl.text, label: 'Regular');
+        final priceMediumError =
+            _validatePriceValue(_priceMediumCtrl.text, label: 'Medium');
         if (priceRegularError != null || priceMediumError != null) {
-          final message = priceRegularError ?? priceMediumError ?? 'Please enter a valid numeric price.';
+          final message = priceRegularError ??
+              priceMediumError ??
+              'Please enter a valid numeric price.';
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(message), backgroundColor: AppColors.red),
@@ -863,16 +945,20 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
           return;
         }
 
-        final priceRegular = _parsePriceValue(_priceRegularCtrl.text, label: 'Regular');
-        final priceMedium = _parsePriceValue(_priceMediumCtrl.text, label: 'Medium');
+        final priceRegular =
+            _parsePriceValue(_priceRegularCtrl.text, label: 'Regular');
+        final priceMedium =
+            _parsePriceValue(_priceMediumCtrl.text, label: 'Medium');
         priceByCupSize = {'Regular': priceRegular, 'Medium': priceMedium};
         mainPrice = priceMedium;
       } else if (is16ozOnly) {
-        final price16Error = _validatePriceValue(_price16Ctrl.text, label: '16oz');
+        final price16Error =
+            _validatePriceValue(_price16Ctrl.text, label: '16oz');
         if (price16Error != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(price16Error), backgroundColor: AppColors.red),
+              SnackBar(
+                  content: Text(price16Error), backgroundColor: AppColors.red),
             );
           }
           return;
@@ -882,11 +968,13 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
         priceByCupSize = {'16oz': price16};
         mainPrice = price16;
       } else if (is12ozOnly) {
-        final price12Error = _validatePriceValue(_price12Ctrl.text, label: '12oz');
+        final price12Error =
+            _validatePriceValue(_price12Ctrl.text, label: '12oz');
         if (price12Error != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(price12Error), backgroundColor: AppColors.red),
+              SnackBar(
+                  content: Text(price12Error), backgroundColor: AppColors.red),
             );
           }
           return;
@@ -898,7 +986,9 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
       }
       final menuItem = MenuItem(
         id: existing?.id ?? '',
-        name: _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : (existing?.name ?? ''),
+        name: _nameCtrl.text.trim().isNotEmpty
+            ? _nameCtrl.text.trim()
+            : (existing?.name ?? ''),
         price: mainPrice,
         icon: existing?.icon ?? '☕',
         category: _category,
@@ -938,7 +1028,8 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEditing = widget.item != null;
     final categoryCupType = _selectedCupType;
-    final isCoffeeBase = categoryCupType == CategoryCupSizeType.twelveAndSixteen;
+    final isCoffeeBase =
+        categoryCupType == CategoryCupSizeType.twelveAndSixteen;
     final isSnacks = categoryCupType == CategoryCupSizeType.regularAndMedium;
     final is16ozOnly = categoryCupType == CategoryCupSizeType.sixteenOnly;
     final is12ozOnly = categoryCupType == CategoryCupSizeType.twelveOnly;
@@ -989,44 +1080,62 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                   if (isCoffeeBase) ...[
                     TextFormField(
                       controller: _price12Ctrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: '12oz Price'),
-                      validator: (value) => _validatePriceValue(value, label: '12oz'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: '12oz Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: '12oz'),
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _price16Ctrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: '16oz Price'),
-                      validator: (value) => _validatePriceValue(value, label: '16oz'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: '16oz Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: '16oz'),
                     ),
                   ] else if (isSnacks) ...[
                     TextFormField(
                       controller: _priceRegularCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Regular Price'),
-                      validator: (value) => _validatePriceValue(value, label: 'Regular'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: 'Regular Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: 'Regular'),
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _priceMediumCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Medium Price'),
-                      validator: (value) => _validatePriceValue(value, label: 'Medium'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: 'Medium Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: 'Medium'),
                     ),
                   ] else if (is16ozOnly) ...[
                     TextFormField(
                       controller: _price16Ctrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: '16oz Price'),
-                      validator: (value) => _validatePriceValue(value, label: '16oz'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: '16oz Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: '16oz'),
                     ),
                   ] else if (is12ozOnly) ...[
                     TextFormField(
                       controller: _price12Ctrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: '12oz Price'),
-                      validator: (value) => _validatePriceValue(value, label: '12oz'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: '12oz Price'),
+                      validator: (value) =>
+                          _validatePriceValue(value, label: '12oz'),
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -1056,10 +1165,13 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                                   : buildMenuItemImage(
                                       _clearImageRequested
                                           ? null
-                                          : (_selectedImageFile?.path ?? widget.item?.imagePath),
+                                          : (_selectedImageFile?.path ??
+                                              widget.item?.imagePath),
                                       _clearImageRequested
                                           ? null
-                                          : (_selectedImageFile != null ? null : widget.item?.imageBase64),
+                                          : (_selectedImageFile != null
+                                              ? null
+                                              : widget.item?.imageBase64),
                                       _clearImageRequested
                                           ? null
                                           : widget.item?.imageMimeType,
@@ -1077,7 +1189,10 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                                 icon: const Icon(Icons.photo_library_outlined),
                                 label: const Text('Upload image'),
                               ),
-                              if (_selectedImageFile != null || _selectedImageBytes != null || widget.item?.imagePath != null || _clearImageRequested) ...[
+                              if (_selectedImageFile != null ||
+                                  _selectedImageBytes != null ||
+                                  widget.item?.imagePath != null ||
+                                  _clearImageRequested) ...[
                                 const SizedBox(width: 8),
                                 TextButton(
                                   onPressed: () => setState(() {
@@ -1111,12 +1226,15 @@ class _MenuFormSheetState extends State<_MenuFormSheet> {
                     child: Text(
                       categoryCupType == CategoryCupSizeType.twelveAndSixteen
                           ? 'Cup size is selected when the drink is added to the cart.'
-                          : categoryCupType == CategoryCupSizeType.regularAndMedium
-                          ? 'Size (Regular/Medium) is selected when the item is added to the cart.'
-                          : categoryCupType == CategoryCupSizeType.sixteenOnly
-                          ? '16oz is the only available size for this category.'
-                          : '12oz is the only available size for this category.',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          : categoryCupType ==
+                                  CategoryCupSizeType.regularAndMedium
+                              ? 'Size (Regular/Medium) is selected when the item is added to the cart.'
+                              : categoryCupType ==
+                                      CategoryCupSizeType.sixteenOnly
+                                  ? '16oz is the only available size for this category.'
+                                  : '12oz is the only available size for this category.',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textMuted),
                     ),
                   ),
                   const SizedBox(height: 10),

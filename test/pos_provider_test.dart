@@ -23,17 +23,20 @@ void main() {
   test('rejects invalid emails before creating an account', () async {
     final auth = AuthProvider();
 
-    final ok = await auth.register('test@', 'password123', 'Test User', UserRole.barista);
+    final ok = await auth.register(
+        'test@', 'password123', 'Test User', UserRole.barista);
 
     expect(ok, isFalse);
     expect(auth.user, isNull);
     expect(auth.error, 'Please enter a valid email address.');
   });
 
-  test('returns the required stronger-password message for weak passwords', () async {
+  test('returns the required stronger-password message for weak passwords',
+      () async {
     final auth = AuthProvider();
 
-    final ok = await auth.register('user@example.com', '123', 'Test User', UserRole.barista);
+    final ok = await auth.register(
+        'user@example.com', '123', 'Test User', UserRole.barista);
 
     expect(ok, isFalse);
     expect(auth.user, isNull);
@@ -42,7 +45,8 @@ void main() {
 
   test('creates a valid account and signs the user in immediately', () async {
     final auth = AuthProvider();
-    final ok = await auth.register('newstaff@example.com', 'password123', 'New Staff', UserRole.barista);
+    final ok = await auth.register(
+        'newstaff@example.com', 'password123', 'New Staff', UserRole.barista);
 
     expect(ok, isTrue);
     expect(auth.user, isNotNull);
@@ -52,7 +56,8 @@ void main() {
 
   test('newly created account can sign in with its credentials', () async {
     final auth = AuthProvider();
-    final created = await auth.register('signedin@example.com', 'password123', 'Signed In User', UserRole.admin);
+    final created = await auth.register('signedin@example.com', 'password123',
+        'Signed In User', UserRole.admin);
     final signedIn = await auth.signIn('signedin@example.com', 'password123');
 
     expect(created, isTrue);
@@ -61,7 +66,9 @@ void main() {
     expect(auth.user!.email, 'signedin@example.com');
   });
 
-  test('updates the existing snack cart line when its size is changed instead of creating a duplicate', () {
+  test(
+      'updates the existing snack cart line when its size is changed instead of creating a duplicate',
+      () {
     final provider = PosProvider();
     final menuItem = MenuItem(
       id: 'fries',
@@ -84,7 +91,8 @@ void main() {
     expect(items.single.qty, 1);
   });
 
-  test('updates the existing cart line when the same drink cup size is edited', () {
+  test('updates the existing cart line when the same drink cup size is edited',
+      () {
     final provider = PosProvider();
     final menuItem = MenuItem(
       id: 'matcha',
@@ -105,7 +113,9 @@ void main() {
     expect(items.single.qty, 1);
   });
 
-  test('keeps separate cart lines when the same drink is intentionally added twice with different cup sizes', () {
+  test(
+      'keeps separate cart lines when the same drink is intentionally added twice with different cup sizes',
+      () {
     final provider = PosProvider();
     final menuItem = MenuItem(
       id: 'matcha',
@@ -147,7 +157,8 @@ void main() {
     expect(items.single.qty, 2);
   });
 
-  test('uses Regular and Medium as the default snack sizes, not drink sizes', () {
+  test('uses Regular and Medium as the default snack sizes, not drink sizes',
+      () {
     final provider = PosProvider();
     final menuItem = MenuItem(
       id: 'brownie',
@@ -226,7 +237,8 @@ void main() {
     expect(items.where((item) => item.cupSize == '16oz').single.price, 80);
   });
 
-  test('uses the latest saved menu price for coffee items added to the cart', () async {
+  test('uses the latest saved menu price for coffee items added to the cart',
+      () async {
     final menuService = MenuService();
     final persistedItem = MenuItem(
       id: 'dynamic-coffee-price',
@@ -249,7 +261,9 @@ void main() {
     expect(items.single.price, 75);
   });
 
-  test('menu service resolves coffee prices to the standard 12oz and 16oz values', () {
+  test(
+      'menu service resolves coffee prices to the standard 12oz and 16oz values',
+      () {
     final menuService = MenuService();
     final menuItem = MenuItem(
       id: 'coffee-menu-price',
@@ -264,7 +278,9 @@ void main() {
     expect(menuService.priceForCupSize(menuItem, '16oz'), 80);
   });
 
-  test('keeps Snacks as an available category but starts empty and supports dynamic categories', () async {
+  test(
+      'keeps Snacks as an available category but starts empty and supports dynamic categories',
+      () async {
     final menuService = MenuService();
     await menuService.replaceMenuWithStandardSeed();
 
@@ -276,18 +292,23 @@ void main() {
     final categories = await menuService.fetchCategoryNames();
     expect(categories, contains('Snacks'));
 
-    final duplicateErr = await menuService.addCategory('snacks', CategoryCupSizeType.regularAndMedium);
+    final duplicateErr = await menuService.addCategory(
+        'snacks', CategoryCupSizeType.regularAndMedium);
     expect(duplicateErr, 'This category already exists.');
 
-    final createdErr = await menuService.addCategory('Desserts', CategoryCupSizeType.regularAndMedium);
+    final createdErr = await menuService.addCategory(
+        'Desserts', CategoryCupSizeType.regularAndMedium);
     expect(createdErr, isNull);
     expect((await menuService.fetchCategoryNames()), contains('Desserts'));
-    expect(await menuService.categoryCupSizeType('Desserts'), CategoryCupSizeType.regularAndMedium);
+    expect(await menuService.categoryCupSizeType('Desserts'),
+        CategoryCupSizeType.regularAndMedium);
   });
 
-  test('new category stores cup size configuration and uses it for prices', () async {
+  test('new category stores cup size configuration and uses it for prices',
+      () async {
     final menuService = MenuService();
-    final err = await menuService.addCategory('Test Snacks', CategoryCupSizeType.regularAndMedium);
+    final err = await menuService.addCategory(
+        'Test Snacks', CategoryCupSizeType.regularAndMedium);
     expect(err, isNull);
 
     final configured = await menuService.categoryCupSizeType('Test Snacks');
@@ -308,5 +329,40 @@ void main() {
     expect(menuService.priceForCupSize(item, 'Regular'), 50.0);
     expect(menuService.priceForCupSize(item, 'Medium'), 80.0);
     expect(item.availableCupSizes, ['Regular', 'Medium']);
+  });
+
+  test('updates a category without changing its ID or detaching menu items',
+      () async {
+    final menuService = MenuService();
+    await menuService.replaceMenuWithStandardSeed();
+
+    final categoryId =
+        await menuService.resolveCategoryIdByName('Coffee-espresso base');
+    expect(categoryId, isNotNull);
+
+    final error = await menuService.updateCategory(
+      categoryId!,
+      'Coffee-espresso base',
+      'Coffee Series',
+      CategoryCupSizeType.twelveOnly,
+    );
+
+    expect(error, isNull);
+    expect(
+        await menuService.resolveCategoryIdByName('Coffee Series'), categoryId);
+    expect(await menuService.resolveCategoryIdByName('Coffee-espresso base'),
+        isNull);
+    expect(await menuService.categoryCupSizeType('Coffee Series'),
+        CategoryCupSizeType.twelveOnly);
+    expect(
+      (await menuService.fetchMenuItems())
+          .every((item) => item.category != 'Coffee-espresso base'),
+      isTrue,
+    );
+    expect(
+      (await menuService.fetchMenuItems())
+          .any((item) => item.category == 'Coffee Series'),
+      isTrue,
+    );
   });
 }

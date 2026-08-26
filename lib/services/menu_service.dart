@@ -16,7 +16,8 @@ class MenuImageData {
   final String base64;
   final String mimeType;
 
-  const MenuImageData({required this.path, required this.base64, required this.mimeType});
+  const MenuImageData(
+      {required this.path, required this.base64, required this.mimeType});
 }
 
 class MenuService {
@@ -29,7 +30,8 @@ class MenuService {
     for (final category in MenuData.categories) {
       final name = (category['name'] as String? ?? '').trim();
       if (name.isEmpty) continue;
-      map[name.toLowerCase()] = MenuItem.inferDefaultCupSizeType(name).persistedValue;
+      map[name.toLowerCase()] =
+          MenuItem.inferDefaultCupSizeType(name).persistedValue;
     }
     return map;
   }
@@ -88,6 +90,8 @@ class MenuService {
   Future<List<String>> fetchCategoryNames() async {
     final existing = _categoryBox.get('category_names');
     final defaults = _defaultCategoryNames();
+    final hasCategoryRecords =
+        (_categoryBox.get('category_records') as Map?)?.isNotEmpty == true;
 
     if (existing is List) {
       final parsed = existing
@@ -97,20 +101,27 @@ class MenuService {
           .toList();
       final merged = <String>[];
       final seen = <String>{};
-      for (final name in [...defaults, ...parsed]) {
+      for (final name in [
+        ...(hasCategoryRecords ? const <String>[] : defaults),
+        ...parsed
+      ]) {
         final normalized = name.toLowerCase();
         if (!seen.contains(normalized)) {
           seen.add(normalized);
           merged.add(name);
         }
       }
-      if (merged.isNotEmpty && (existing is! List || parsed.isEmpty || parsed.length != merged.length)) {
+      if (merged.isNotEmpty &&
+          (existing is! List ||
+              parsed.isEmpty ||
+              parsed.length != merged.length)) {
         await _categoryBox.put('category_names', merged);
       }
       if (_categoryBox.get('category_cup_size_types') is! Map) {
         final configs = _defaultCategoryCupConfigs();
         for (final name in merged) {
-          configs.putIfAbsent(name.toLowerCase(), () => MenuItem.inferDefaultCupSizeType(name).persistedValue);
+          configs.putIfAbsent(name.toLowerCase(),
+              () => MenuItem.inferDefaultCupSizeType(name).persistedValue);
         }
         await _categoryBox.put('category_cup_size_types', configs);
       }
@@ -123,21 +134,25 @@ class MenuService {
     return defaults;
   }
 
-  Future<String?> addCategory(String categoryName, [CategoryCupSizeType? cupSizeType]) async {
+  Future<String?> addCategory(String categoryName,
+      [CategoryCupSizeType? cupSizeType]) async {
     final sanitized = categoryName.trim();
     if (sanitized.isEmpty) {
       return 'Category name is required.';
     }
 
     final categories = await fetchCategoryNames();
-    if (categories.any((name) => name.toLowerCase() == sanitized.toLowerCase())) {
+    if (categories
+        .any((name) => name.toLowerCase() == sanitized.toLowerCase())) {
       return 'This category already exists.';
     }
 
-    final resolvedType = cupSizeType ?? MenuItem.inferDefaultCupSizeType(sanitized);
+    final resolvedType =
+        cupSizeType ?? MenuItem.inferDefaultCupSizeType(sanitized);
     final updated = [...categories, sanitized];
     final configs = await _readCategoryCupConfigs();
-    final records = Map<String, dynamic>.from(_categoryBox.get('category_records') as Map? ?? {});
+    final records = Map<String, dynamic>.from(
+        _categoryBox.get('category_records') as Map? ?? {});
     final categoryId = _uuid.v4();
     records[categoryId] = {
       'id': categoryId,
@@ -151,8 +166,63 @@ class MenuService {
     return null;
   }
 
+  Future<String?> updateCategory(
+    String categoryId,
+    String oldCategoryName,
+    String categoryName,
+    CategoryCupSizeType cupSizeType,
+  ) async {
+    final sanitized = categoryName.trim();
+    final oldName = oldCategoryName.trim();
+    if (sanitized.isEmpty) {
+      return 'Category name is required.';
+    }
+
+    final records = Map<String, dynamic>.from(
+        _categoryBox.get('category_records') as Map? ?? {});
+    final existing = records[categoryId];
+    if (existing == null) {
+      return 'Could not find category.';
+    }
+
+    final categories = await fetchCategoryNames();
+    if (categories.any((name) =>
+        name.toLowerCase() == sanitized.toLowerCase() &&
+        name.toLowerCase() != oldName.toLowerCase())) {
+      return 'This category already exists.';
+    }
+
+    final updatedNames = categories.map((name) {
+      return name.toLowerCase() == oldName.toLowerCase() ? sanitized : name;
+    }).toList();
+    final configs = await _readCategoryCupConfigs();
+    configs.remove(oldName.toLowerCase());
+    configs[sanitized.toLowerCase()] = cupSizeType.persistedValue;
+    records[categoryId] = {
+      ...Map<String, dynamic>.from(existing as Map),
+      'id': categoryId,
+      'name': sanitized,
+      'cupSizeType': cupSizeType.persistedValue,
+    };
+
+    for (final entry in _menu.values.cast<Map>().toList()) {
+      final map = Map<String, dynamic>.from(entry);
+      final currentCategory = (map['category'] as String? ?? '').trim();
+      if (currentCategory.toLowerCase() == oldName.toLowerCase()) {
+        map['category'] = sanitized;
+        await _menu.put(map['id'], map);
+      }
+    }
+
+    await _categoryBox.put('category_names', updatedNames);
+    await _categoryBox.put('category_cup_size_types', configs);
+    await _categoryBox.put('category_records', records);
+    return null;
+  }
+
   Future<List<Map<String, dynamic>>> fetchCategoryEntries() async {
-    final records = Map<String, dynamic>.from(_categoryBox.get('category_records') as Map? ?? {});
+    final records = Map<String, dynamic>.from(
+        _categoryBox.get('category_records') as Map? ?? {});
     final names = await fetchCategoryNames();
     final resolved = <Map<String, dynamic>>[];
     final existingNames = <String>{};
@@ -162,7 +232,12 @@ class MenuService {
       final name = (map['name'] as String? ?? '').trim();
       if (name.isEmpty) continue;
       if (existingNames.add(name.toLowerCase())) {
-        resolved.add({'id': map['id'] ?? _uuid.v4(), 'name': name, 'cupSizeType': map['cupSizeType'] ?? MenuItem.inferDefaultCupSizeType(name).persistedValue});
+        resolved.add({
+          'id': map['id'] ?? _uuid.v4(),
+          'name': name,
+          'cupSizeType': map['cupSizeType'] ??
+              MenuItem.inferDefaultCupSizeType(name).persistedValue
+        });
       }
     }
 
@@ -171,8 +246,13 @@ class MenuService {
       if (existingNames.contains(normalized)) continue;
       final type = await categoryCupSizeType(name);
       final id = _uuid.v4();
-      resolved.add({'id': id, 'name': name, 'cupSizeType': type.persistedValue});
-      records[id] = {'id': id, 'name': name, 'cupSizeType': type.persistedValue};
+      resolved
+          .add({'id': id, 'name': name, 'cupSizeType': type.persistedValue});
+      records[id] = {
+        'id': id,
+        'name': name,
+        'cupSizeType': type.persistedValue
+      };
     }
 
     if (records.isNotEmpty) {
@@ -244,7 +324,8 @@ class MenuService {
   }
 
   Future<void> deleteCategory(String categoryId) async {
-    final records = Map<String, dynamic>.from(_categoryBox.get('category_records') as Map? ?? {});
+    final records = Map<String, dynamic>.from(
+        _categoryBox.get('category_records') as Map? ?? {});
     final target = records[categoryId];
     if (target == null) return;
 
@@ -312,9 +393,11 @@ class MenuService {
   }
 
   double priceForCupSize(MenuItem menuItem, String cupSize) {
-    final latestMenuItem = menuItem.id.isNotEmpty ? getMenuItemById(menuItem.id) : null;
+    final latestMenuItem =
+        menuItem.id.isNotEmpty ? getMenuItemById(menuItem.id) : null;
     final resolvedMenuItem = latestMenuItem ?? menuItem;
-    final normalizedCupSize = (cupSize.isNotEmpty ? cupSize : resolvedMenuItem.cupSize).trim();
+    final normalizedCupSize =
+        (cupSize.isNotEmpty ? cupSize : resolvedMenuItem.cupSize).trim();
     final mappedPrice = resolvedMenuItem.priceByCupSize[normalizedCupSize];
     if (mappedPrice != null) {
       return mappedPrice;
@@ -327,9 +410,11 @@ class MenuService {
             resolvedMenuItem.priceByCupSize['16oz'] ??
             resolvedMenuItem.price;
       case CategoryCupSizeType.twelveOnly:
-        return resolvedMenuItem.priceByCupSize['12oz'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['12oz'] ??
+            resolvedMenuItem.price;
       case CategoryCupSizeType.sixteenOnly:
-        return resolvedMenuItem.priceByCupSize['16oz'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['16oz'] ??
+            resolvedMenuItem.price;
       case CategoryCupSizeType.regularAndMedium:
         return resolvedMenuItem.priceByCupSize['Regular'] ??
             resolvedMenuItem.priceByCupSize['Medium'] ??
@@ -338,18 +423,23 @@ class MenuService {
   }
 
   double displayPriceForMenuCard(MenuItem menuItem) {
-    final latestMenuItem = menuItem.id.isNotEmpty ? getMenuItemById(menuItem.id) : null;
+    final latestMenuItem =
+        menuItem.id.isNotEmpty ? getMenuItemById(menuItem.id) : null;
     final resolvedMenuItem = latestMenuItem ?? menuItem;
 
     switch (resolvedMenuItem.cupSizeType) {
       case CategoryCupSizeType.twelveAndSixteen:
-        return resolvedMenuItem.priceByCupSize['12oz'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['12oz'] ??
+            resolvedMenuItem.price;
       case CategoryCupSizeType.twelveOnly:
-        return resolvedMenuItem.priceByCupSize['12oz'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['12oz'] ??
+            resolvedMenuItem.price;
       case CategoryCupSizeType.sixteenOnly:
-        return resolvedMenuItem.priceByCupSize['16oz'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['16oz'] ??
+            resolvedMenuItem.price;
       case CategoryCupSizeType.regularAndMedium:
-        return resolvedMenuItem.priceByCupSize['Regular'] ?? resolvedMenuItem.price;
+        return resolvedMenuItem.priceByCupSize['Regular'] ??
+            resolvedMenuItem.price;
     }
   }
 
@@ -388,13 +478,16 @@ class MenuService {
       }
 
       final supportDir = await getApplicationSupportDirectory();
-      final safeId = (menuItemId ?? _uuid.v4()).replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final safeId = (menuItemId ?? _uuid.v4())
+          .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       final target = File('${supportDir.path}/menu_images/$safeId.jpg');
       await target.create(recursive: true);
       final encoded = img.encodeJpg(square, quality: 85);
       await target.writeAsBytes(encoded, flush: true);
 
-      if (previousPath != null && previousPath.isNotEmpty && previousPath != target.path) {
+      if (previousPath != null &&
+          previousPath.isNotEmpty &&
+          previousPath != target.path) {
         try {
           final previousFile = File(previousPath);
           if (previousFile.existsSync()) {
@@ -419,7 +512,8 @@ class MenuService {
     String? previousPath,
   }) async {
     final bytes = await source.readAsBytes();
-    return saveMenuImageBytes(bytes, menuItemId: menuItemId, previousPath: previousPath);
+    return saveMenuImageBytes(bytes,
+        menuItemId: menuItemId, previousPath: previousPath);
   }
 
   Future<List<Map<String, dynamic>>> _buildDefaultSeedData() async {
@@ -441,7 +535,10 @@ class MenuService {
           CategoryCupSizeType.twelveAndSixteen => {'12oz': 60.0, '16oz': 80.0},
           CategoryCupSizeType.twelveOnly => {'12oz': price},
           CategoryCupSizeType.sixteenOnly => {'16oz': price},
-          CategoryCupSizeType.regularAndMedium => {'Regular': price, 'Medium': price},
+          CategoryCupSizeType.regularAndMedium => {
+              'Regular': price,
+              'Medium': price
+            },
         };
 
         seedData.add({
@@ -467,7 +564,10 @@ class MenuService {
         return false;
       }
       final normalized = item.name.toLowerCase();
-      return normalized.endsWith('12oz') || normalized.endsWith('16oz') || normalized.contains(' 12oz') || normalized.contains(' 16oz');
+      return normalized.endsWith('12oz') ||
+          normalized.endsWith('16oz') ||
+          normalized.contains(' 12oz') ||
+          normalized.contains(' 16oz');
     });
   }
 
@@ -570,7 +670,8 @@ class MenuService {
     final existingIdsByKey = <String, String>{};
     for (final entry in _menu.values.cast<Map>()) {
       final existing = MenuItem.fromMap(Map<String, dynamic>.from(entry));
-      final key = '${existing.name.trim().toLowerCase()}::${existing.category.trim().toLowerCase()}';
+      final key =
+          '${existing.name.trim().toLowerCase()}::${existing.category.trim().toLowerCase()}';
       existingIdsByKey[key] = existing.id;
     }
 
@@ -579,8 +680,10 @@ class MenuService {
     }
 
     for (final item in items) {
-      final key = '${item.name.trim().toLowerCase()}::${item.category.trim().toLowerCase()}';
-      final resolvedId = item.id.isNotEmpty ? item.id : (existingIdsByKey[key] ?? '');
+      final key =
+          '${item.name.trim().toLowerCase()}::${item.category.trim().toLowerCase()}';
+      final resolvedId =
+          item.id.isNotEmpty ? item.id : (existingIdsByKey[key] ?? '');
       final id = resolvedId.isEmpty ? const Uuid().v4() : resolvedId;
       await _menu.put(id, {...item.toMap(), 'id': id});
     }
@@ -606,9 +709,12 @@ class MenuService {
   Future<void> replaceMenuWithStandardSeed() async {
     for (final entry in _menu.values.cast<Map>()) {
       final existing = MenuItem.fromMap(Map<String, dynamic>.from(entry));
-      if (existing.hasCustomImage && existing.imagePath != null && existing.imagePath!.isNotEmpty) {
+      if (existing.hasCustomImage &&
+          existing.imagePath != null &&
+          existing.imagePath!.isNotEmpty) {
         final imageFile = File(existing.imagePath!);
-        if (imageFile.existsSync() && !existing.imagePath!.startsWith('assets/')) {
+        if (imageFile.existsSync() &&
+            !existing.imagePath!.startsWith('assets/')) {
           try {
             await imageFile.delete();
           } catch (_) {}
